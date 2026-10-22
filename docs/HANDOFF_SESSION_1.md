@@ -247,7 +247,7 @@ the 21-column set the default.
 **What changed.**
 - Registry: groups 12-15 (non-core, so missing values are allowed); sets `f14` (f15 without SYN) and
   `f21` (f14 + 12-15). `DEFAULT_FEATURE_SET = "f21"`; `train_model.py` defaults to it (outputs `*_f21`).
-- App default model `all_tools_f21` (falls back to `all_tools_f15`, then `all_tools`). The
+- App default model `all_tools_f21` (falls back to `all_tools_f15`). The
   missing-column dialog now offers the first of those that can score the file (checked headless:
   a CSV without `PSH Flag Cnt` offers a model that does not need it).
 - Features panel: "Model features (default set f21)", 12-15 under "Added in update 3", feature 5
@@ -277,3 +277,9 @@ the 21-column set the default.
 **Not done / not tested:** the real window by hand; whether the group accepts the wording of 12-15;
 the rest of Week 4 still describes the plan before the first run (section 7 "has not been run yet",
 section 8 "Next: download the files"). Nothing committed.
+
+**Nine-column models removed (22 Oct 2026, user's request).** `all_tools`, its seeds 1-4 and the
+nine-column held-out models were deleted from `DDoSDetector\models\` (the committed ones remain in Git
+history up to `d6034a8`; the seed files were never committed). The app no longer falls back to
+`all_tools`. The code can still load a nine-column model opened by hand, and `--feature-set f9`
+still trains one.

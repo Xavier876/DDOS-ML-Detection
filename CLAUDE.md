@@ -68,8 +68,9 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   "model score" (0–1, uncalibrated because of `scale_pos_weight`). A test scans `app/` and README.
 - **Feature columns are defined only in the registry** (`app/core/features.py`): never write a list
   of model columns anywhere else (a test scans for it). Default model (update 3): **13 feature groups
-  (21 columns)**, set `f21` = f15 without SYN Flag Cnt plus groups 12–15; `f15` and the original
-  nine (`f9`) still load and score. Use `summary(columns)` for wording. Each
+  (21 columns)**, set `f21` = f15 without SYN Flag Cnt plus groups 12–15; `f15` models are kept.
+  The user removed the nine-column (`f9`) models from this version (22 Oct 2026): don't add them
+  back or fall back to them. The code still loads a nine-column model if one is opened by hand. Use `summary(columns)` for wording. Each
   model's `.meta.json` has `feature_columns`; the app builds exactly those (`model_columns(meta)`;
   no field = the original nine). IP addresses and timestamps are **never** model inputs
   (`Src IP`/`Dst IP`/`Dst Port` are kept only as alert tracing fields).
