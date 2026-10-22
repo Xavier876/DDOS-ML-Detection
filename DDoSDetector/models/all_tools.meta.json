@@ -1,0 +1,119 @@
+{
+  "title": "All tools (benign + LOIC-HTTP + LOIC-UDP + HOIC)",
+  "features": [
+    "Flow Pkts/s",
+    "Flow Byts/s",
+    "Flow Duration",
+    "Flow IAT Mean",
+    "Flow IAT Std",
+    "SYN Flag Cnt",
+    "Fwd Pkt Len Mean",
+    "Fwd Pkt Len Std",
+    "fwd_bwd_ratio"
+  ],
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "all_tools",
+  "setup": "all_tools",
+  "held_out_tool": null,
+  "benign_split": "random 70/30 stratified by tool",
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_TrafficForML_CICFlowMeter.csv",
+    "Wednesday-21-02-2018_TrafficForML_CICFlowMeter.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "rows_after_cleaning": {
+    "Benign": 7542570,
+    "HOIC": 668461,
+    "LOIC-HTTP": 576174,
+    "LOIC-UDP": 1730
+  },
+  "train_rows": {
+    "Benign": 700000,
+    "HOIC": 467922,
+    "LOIC-HTTP": 403322,
+    "LOIC-UDP": 1211
+  },
+  "test_rows": {
+    "Benign": 300000,
+    "HOIC": 200539,
+    "LOIC-HTTP": 172852,
+    "LOIC-UDP": 519
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "tree_method": "hist",
+    "scale_pos_weight": 0.8023336447152002,
+    "n_jobs": -1,
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 300000,
+    "n_test_attack": 373910,
+    "recall": {
+      "HOIC": 0.9987,
+      "LOIC-HTTP": 0.989,
+      "LOIC-UDP": 1.0
+    },
+    "n_test": {
+      "HOIC": 200539,
+      "LOIC-HTTP": 172852,
+      "LOIC-UDP": 519
+    },
+    "fpr": 0.0104,
+    "false_alarms": 3133,
+    "pr_auc": 0.999,
+    "roc_auc": 0.999,
+    "base_rate": 0.5548,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 0.9942,
+        "fpr": 0.0104
+      },
+      {
+        "threshold": 0.2,
+        "recall": 0.9983,
+        "fpr": 0.0181
+      },
+      {
+        "threshold": 0.1,
+        "recall": 0.9993,
+        "fpr": 0.023
+      },
+      {
+        "threshold": 0.05,
+        "recall": 0.9996,
+        "fpr": 0.0265
+      },
+      {
+        "threshold": 0.01,
+        "recall": 0.9998,
+        "fpr": 0.0386
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-10-22T03:40:14+00:00",
+  "background_file": "all_tools.background.parquet",
+  "model_file": "all_tools.json",
+  "version": "af0a61c69a"
+}

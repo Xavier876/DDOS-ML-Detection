@@ -1,0 +1,120 @@
+{
+  "summary": "6 feature groups (9 columns)",
+  "hypothesis_note": "The assumptions below are hypotheses. Where the data did not support an assumption, this is stated.",
+  "source": "DRAFT placeholder text written for the app. Replace raw_data, calculation, assumption, legitimate_lookalike and evasion with the group's Week 3 feature table, and set \"draft\": false.",
+  "draft": true,
+  "dropped": "Flows to the same destination in a 10 s window: dropped because the 21 Feb file has no Dst IP column.",
+  "groups": [
+    {
+      "group": "Rate",
+      "features": [
+        {
+          "column": "Flow Pkts/s",
+          "raw_data": "Packet timestamps and packet counts of each flow (CICFlowMeter).",
+          "calculation": "(Tot Fwd Pkts + Tot Bwd Pkts) / Flow Duration, in packets per second.",
+          "assumption": "A flood sends packets at a higher rate than normal flows.",
+          "expected_direction": "higher",
+          "legitimate_lookalike": "Video streaming, large downloads, backups, bursts after a popular page goes live.",
+          "evasion": "Spread the attack over many more bots or connections so each flow has a normal rate."
+        },
+        {
+          "column": "Flow Byts/s",
+          "raw_data": "Packet sizes and timestamps of each flow.",
+          "calculation": "(TotLen Fwd Pkts + TotLen Bwd Pkts) / Flow Duration, in bytes per second.",
+          "assumption": "A flood moves more bytes per second than a normal flow.",
+          "expected_direction": "higher",
+          "legitimate_lookalike": "File transfers, software updates, streaming.",
+          "evasion": "Use small packets or a lower per-flow rate across many sources."
+        }
+      ]
+    },
+    {
+      "group": "Duration",
+      "features": [
+        {
+          "column": "Flow Duration",
+          "raw_data": "Timestamps of the first and last packet of each flow.",
+          "calculation": "Time between the first and last packet of the flow, in microseconds.",
+          "assumption": "Attack tools open many short connections, so attack flows are shorter.",
+          "expected_direction": "lower",
+          "legitimate_lookalike": "Short DNS lookups, health checks, single small HTTP requests.",
+          "evasion": "Hold connections open longer (slow, long-lived requests) or reuse connections."
+        }
+      ]
+    },
+    {
+      "group": "Forward/backward ratio",
+      "features": [
+        {
+          "column": "fwd_bwd_ratio",
+          "raw_data": "Packet counts in each direction (Tot Fwd Pkts, Tot Bwd Pkts).",
+          "calculation": "Tot Fwd Pkts / (Tot Bwd Pkts + 1). The +1 avoids dividing by zero for one-way flows.",
+          "assumption": "Flood traffic is mostly one-way: the attacker sends much more than the victim answers.",
+          "expected_direction": "higher",
+          "legitimate_lookalike": "Uploads, one-way UDP streams, telemetry and logging traffic.",
+          "evasion": "Use requests that make the server reply (complete handshakes, request large responses)."
+        }
+      ]
+    },
+    {
+      "group": "Inter-arrival time",
+      "features": [
+        {
+          "column": "Flow IAT Mean",
+          "raw_data": "Timestamps of every packet in the flow.",
+          "calculation": "Mean time between consecutive packets of the flow, in microseconds.",
+          "assumption": "Automated tools send packets back-to-back, so the mean gap is smaller.",
+          "expected_direction": "lower",
+          "legitimate_lookalike": "Bulk transfers and streaming also send packets back-to-back.",
+          "evasion": "Add delays between packets (low-and-slow attacks)."
+        },
+        {
+          "column": "Flow IAT Std",
+          "raw_data": "Timestamps of every packet in the flow.",
+          "calculation": "Standard deviation of the time between consecutive packets, in microseconds.",
+          "assumption": "Tool traffic is machine-regular, so the gaps vary less than in human-driven traffic.",
+          "expected_direction": "lower",
+          "legitimate_lookalike": "Periodic keep-alives, polling clients, monitoring agents.",
+          "evasion": "Add random jitter to the packet timing."
+        }
+      ]
+    },
+    {
+      "group": "SYN flag count",
+      "features": [
+        {
+          "column": "SYN Flag Cnt",
+          "raw_data": "TCP flags of every packet in the flow.",
+          "calculation": "Number of packets in the flow with the SYN flag set.",
+          "assumption": "SYN-based floods set the SYN flag on many packets.",
+          "expected_direction": "higher",
+          "legitimate_lookalike": "Connection retries on a lossy network, legitimate port scanners.",
+          "evasion": "Use application-layer floods (HTTP) over fully opened connections, or UDP."
+        }
+      ]
+    },
+    {
+      "group": "Forward packet length",
+      "features": [
+        {
+          "column": "Fwd Pkt Len Mean",
+          "raw_data": "Sizes of the packets sent from source to destination.",
+          "calculation": "Mean size of forward packets in the flow, in bytes.",
+          "assumption": "Flood packets are small (little or no payload).",
+          "expected_direction": "lower",
+          "legitimate_lookalike": "ACK-only traffic, small API calls, IoT messages.",
+          "evasion": "Pad packets with random payload."
+        },
+        {
+          "column": "Fwd Pkt Len Std",
+          "raw_data": "Sizes of the packets sent from source to destination.",
+          "calculation": "Standard deviation of forward packet sizes in the flow, in bytes.",
+          "assumption": "A tool sends identical packets, so the sizes hardly vary.",
+          "expected_direction": "lower",
+          "legitimate_lookalike": "Fixed-size telemetry or heartbeat messages.",
+          "evasion": "Randomise the packet sizes."
+        }
+      ]
+    }
+  ]
+}

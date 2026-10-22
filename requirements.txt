@@ -1,0 +1,12 @@
+# Verified together on Windows 11, Python 3.14 (SHAP additivity test passes).
+PySide6==6.12.0
+pandas==3.0.6
+numpy==2.5.4
+xgboost==3.4.1
+scikit-learn==1.9.1
+shap==0.54.1
+matplotlib==3.11.2
+pyarrow==26.0.0
+joblib==1.6.0
+pytest==9.1.1
+# Packaging only (stretch goal): pip install pyinstaller

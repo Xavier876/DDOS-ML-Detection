@@ -1,0 +1,124 @@
+{
+  "title": "HOIC held out (trained on LOIC-HTTP + LOIC-UDP + benign; attack-period benign split)",
+  "features": [
+    "Flow Pkts/s",
+    "Flow Byts/s",
+    "Flow Duration",
+    "Flow IAT Mean",
+    "Flow IAT Std",
+    "SYN Flag Cnt",
+    "Fwd Pkt Len Mean",
+    "Fwd Pkt Len Std",
+    "fwd_bwd_ratio"
+  ],
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "held_out",
+  "setup": "hoic_held_out_attack_period",
+  "held_out_tool": "HOIC",
+  "benign_split_mode": "attack_period",
+  "benign_split": "attack_period: benign inside the held-out tool's attack window test, all other benign train",
+  "attack_window": [
+    "2018-02-21 02:11:08",
+    "2018-02-21 02:33:29"
+  ],
+  "timing": {
+    "train_seconds": 8.19,
+    "train_rows": 1577904,
+    "predict_seconds": 0.94,
+    "predict_rows": 1027080,
+    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
+  },
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_TrafficForML_CICFlowMeter.csv",
+    "Wednesday-21-02-2018_TrafficForML_CICFlowMeter.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "rows_after_cleaning": {
+    "Benign": 7542570,
+    "HOIC": 668461,
+    "LOIC-HTTP": 576174,
+    "LOIC-UDP": 1730
+  },
+  "train_rows": {
+    "Benign": 1000000,
+    "LOIC-HTTP": 576174,
+    "LOIC-UDP": 1730
+  },
+  "test_rows": {
+    "HOIC": 668461,
+    "Benign": 358619
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "tree_method": "hist",
+    "scale_pos_weight": 1.7303912068440432,
+    "n_jobs": -1,
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 358619,
+    "n_test_attack": 668461,
+    "recall": {
+      "HOIC": 0.1531
+    },
+    "n_test": {
+      "HOIC": 668461
+    },
+    "fpr": 0.0,
+    "false_alarms": 0,
+    "pr_auc": 1.0,
+    "roc_auc": 1.0,
+    "base_rate": 0.6508,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 0.1531,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.2,
+        "recall": 0.2799,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.1,
+        "recall": 0.3631,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.05,
+        "recall": 0.3631,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.01,
+        "recall": 0.4328,
+        "fpr": 0.0
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-10-22T04:58:08+00:00",
+  "background_file": "hoic_held_out_attack_period.background.parquet",
+  "model_file": "hoic_held_out_attack_period.json",
+  "version": "a8479ce2a0"
+}

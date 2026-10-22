@@ -1,0 +1,30 @@
+# Datasets (GBs) and generated samples in the solution's data folder: never commit.
+# Anchored with a leading slash so DDoSDetector/app/data (feature notes + evidence) IS tracked.
+/data/
+
+# Environments, caches, logs
+.venv/
+.vs/
+*.pyproj.user
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+logs/
+
+# Empty scratch notebooks Jupyter creates with "New notebook"
+/Untitled*.ipynb
+
+# Build output (PyInstaller writes to DDoSDetector\bin\Release, intermediates to obj\)
+bin/
+obj/
+build/
+dist/
+*.spec
+
+# Model artefacts: the trained models are ~1 MB each and are committed;
+# extra seed variants are reproducible (train_model.py --seeds) and stay local
+**/models/*_seed*
+**/models/*.csv
+# ...except the notebook 9c results the app reads (small)
+!**/models/feature_set_comparison.csv

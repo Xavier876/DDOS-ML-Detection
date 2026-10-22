@@ -1,0 +1,43 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11205.157
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "DDoSDetector", "DDoSDetector\DDoSDetector.pyproj", "{8A852643-0DEA-426A-A55D-247BD38A5FD4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{3F5A9C1E-2B7D-4E8A-9C61-0D4B7E2A51C3}"
+	ProjectSection(SolutionItems) = preProject
+		.gitignore = .gitignore
+		CLAUDE.md = CLAUDE.md
+		README.md = README.md
+		requirements.txt = requirements.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{6B1E0D47-91C2-4F3A-8E55-27A9C4D0B8F2}"
+	ProjectSection(SolutionItems) = preProject
+		docs\HANDOFF_desktop_app.md = docs\HANDOFF_desktop_app.md
+		docs\HANDOFF_UPDATE_1.md = docs\HANDOFF_UPDATE_1.md
+		docs\HANDOFF_SESSION_1.md = docs\HANDOFF_SESSION_1.md
+		docs\COMP6310_Project_Handoff.md = docs\COMP6310_Project_Handoff.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "notebooks", "notebooks", "{C47D2E91-5A3B-4F0E-B6D8-91E2A7C3F054}"
+	ProjectSection(SolutionItems) = preProject
+		notebooks\ddos_xgboost_detector.ipynb = notebooks\ddos_xgboost_detector.ipynb
+		notebooks\ddos_xgboost_starter.ipynb = notebooks\ddos_xgboost_starter.ipynb
+		notebooks\ddos_xgboost_starter_v2.ipynb = notebooks\ddos_xgboost_starter_v2.ipynb
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8A852643-0DEA-426A-A55D-247BD38A5FD4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A852643-0DEA-426A-A55D-247BD38A5FD4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

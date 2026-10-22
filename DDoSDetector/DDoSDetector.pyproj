@@ -1,0 +1,104 @@
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" ToolsVersion="4.0">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{8A852643-0DEA-426A-A55D-247BD38A5FD4}</ProjectGuid>
+    <ProjectHome>.</ProjectHome>
+    <StartupFile>app\main.py</StartupFile>
+    <SearchPath>.</SearchPath>
+    <WorkingDirectory>.</WorkingDirectory>
+    <OutputPath>.</OutputPath>
+    <Name>DDoSDetector</Name>
+    <RootNamespace>DDoSDetector</RootNamespace>
+    <!-- Uses the solution's .venv (declared below) as the active Python environment -->
+    <InterpreterId>MSBuild|env|$(MSBuildProjectFullPath)</InterpreterId>
+    <TestFramework>pytest</TestFramework>
+    <UnitTestPattern>test*.py</UnitTestPattern>
+    <UnitTestRootDirectory>tests</UnitTestRootDirectory>
+    <IsWindowsApplication>False</IsWindowsApplication>
+    <LaunchProvider>Standard Python launcher</LaunchProvider>
+    <CommandLineArguments />
+    <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <DebugSymbols>true</DebugSymbols>
+    <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
+  </PropertyGroup>
+  <ItemGroup>
+    <Interpreter Include="..\.venv\">
+      <Id>env</Id>
+      <Version>3.14</Version>
+      <Description>.venv (Python 3.14 (64-bit))</Description>
+      <InterpreterPath>Scripts\python.exe</InterpreterPath>
+      <WindowsInterpreterPath>Scripts\pythonw.exe</WindowsInterpreterPath>
+      <PathEnvironmentVariable>PYTHONPATH</PathEnvironmentVariable>
+      <Architecture>X64</Architecture>
+    </Interpreter>
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="app\" />
+    <Folder Include="app\core\" />
+    <Folder Include="app\data\" />
+    <Folder Include="app\plots\" />
+    <Folder Include="app\ui\" />
+    <Folder Include="train\" />
+    <Folder Include="scripts\" />
+    <Folder Include="tests\" />
+    <Folder Include="models\" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="app\__init__.py" />
+    <Compile Include="app\main.py" />
+    <Compile Include="app\paths.py" />
+    <Compile Include="app\workers.py" />
+    <Compile Include="app\core\__init__.py" />
+    <Compile Include="app\core\csv_reader.py" />
+    <Compile Include="app\core\explain.py" />
+    <Compile Include="app\core\feature_notes.py" />
+    <Compile Include="app\core\features.py" />
+    <Compile Include="app\core\impact.py" />
+    <Compile Include="app\core\model_store.py" />
+    <Compile Include="app\core\review.py" />
+    <Compile Include="app\core\scoring.py" />
+    <Compile Include="app\core\timing.py" />
+    <Compile Include="app\plots\operational_impact.py" />
+    <Compile Include="app\plots\seed_stability.py" />
+    <Compile Include="app\plots\model_stability.py" />
+    <Compile Include="app\plots\held_out_comparison.py" />
+    <Compile Include="app\plots\threshold_sweep.py" />
+    <Compile Include="app\plots\flash_crowd.py" />
+    <Compile Include="tests\test_rotation.py" />
+    <Compile Include="app\ui\features_dialog.py" />
+    <Compile Include="tests\test_update1.py" />
+    <Compile Include="app\plots\__init__.py" />
+    <Compile Include="app\plots\_style.py" />
+    <Compile Include="app\plots\base.py" />
+    <Compile Include="app\plots\score_hist.py" />
+    <Compile Include="app\plots\shap_bar_global.py" />
+    <Compile Include="app\plots\shap_beeswarm.py" />
+    <Compile Include="app\plots\shap_by_tool.py" />
+    <Compile Include="app\plots\shap_waterfall.py" />
+    <Compile Include="app\ui\__init__.py" />
+    <Compile Include="app\ui\about_dialog.py" />
+    <Compile Include="app\ui\main_window.py" />
+    <Compile Include="app\ui\plot_panel.py" />
+    <Compile Include="app\ui\results_table.py" />
+    <Compile Include="train\__init__.py" />
+    <Compile Include="train\train_model.py" />
+    <Compile Include="scripts\make_sample.py" />
+    <Compile Include="tests\conftest.py" />
+    <Compile Include="tests\test_core.py" />
+    <Compile Include="tests\test_ui.py" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="build_exe.ps1" />
+    <Content Include="app\data\feature_notes.json" />
+    <Content Include="app\data\feature_evidence.csv" />
+    <Content Include="models\*.meta.json" />
+  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
+</Project>
