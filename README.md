@@ -109,12 +109,12 @@ right-click → Add → Existing Item.
   the raw columns the **active model** needs (for the default 21-column model also `Bwd Pkt Len Mean`,
   `RST Flag Cnt`, `FIN Flag Cnt`, `TotLen Fwd Pkts`, `TotLen Bwd Pkts`, `Fwd IAT Mean`, `Fwd IAT Min`,
   `Active Mean`, `Idle Mean`, `PSH Flag Cnt`, `Fwd Act Data Pkts`). If some are missing, a dialog names them and, when another model
-  doesn't need them (e.g. `all_tools_f15` when an update-3 column is missing), offers to score with
-  that model instead; it
+  doesn't need them (only models opened by hand, since this version ships only 21-column models),
+  offers to score with that model instead; it
   never scores with fewer features silently. `Label` and `Timestamp` are optional. Rows with
   NaN/infinite values in the original nine columns are kept and shown as **Not scored**; missing
   values in features 8–15 are allowed (XGBoost handles them) and counted in the summary bar.
-- The default model is `all_tools_f21` (falls back to `all_tools_f15`). The status bar shows the model's
+- The default model is `all_tools_f21` (only 21-column models ship with this version). The status bar shows the model's
   name, its feature set and version.
 - **Threshold** slider/spin box re-flags instantly. Filter by flag and by model-score range
   (the *Uncertain* button shows 0.2–0.8). Click a column header to sort.
@@ -249,22 +249,16 @@ Twenty-one columns (`*_f21`, the default):
 | `loic_http_held_out_f21` / `_attack_period_f21` | LOIC-HTTP 0.003 / 0.003 | 0.0054 (12,310) / 0.0061 (35,177) |
 | `loic_udp_held_out_f21` / `_attack_period_f21` | LOIC-UDP 1.000 / 0.994 (1,730 flows) | 0.0070 (15,848) / 0.0012 (2) |
 
-Each held-out row is one seed; differences from the fifteen-column rows below may be within the
+Each held-out row is one seed, so small differences from earlier models may be within the
 seed-to-seed spread (notebook 9c measures that).
 
-Fifteen columns (`*_f15`):
-
-| Model | Recall on the tool | FPR (false alarms) |
-|---|---|---|
-| `all_tools_f15` (seeds 0–4) | HOIC 0.999, LOIC-HTTP 0.987–0.988, LOIC-UDP 0.998–1.000 | 0.0091–0.0097 |
-| `hoic_held_out_f15` / `_by_file_f15` / `_attack_period_f15` | HOIC 0.212 / 0.149 / 0.153 | 0.0077 (17,460) / 0.0000 (7) / 0.0000 (0) |
-| `loic_http_held_out_f15` / `_attack_period_f15` | LOIC-HTTP 0.003 / 0.003 | 0.0055 (12,352) / 0.0062 (35,386) |
-| `loic_udp_held_out_f15` / `_attack_period_f15` | LOIC-UDP 1.000 / 0.994 (1,730 flows) | 0.0091 (20,628) / 0.0042 (7) |
-
-The nine-column models (`all_tools`, `hoic_held_out`, …) were removed from this version on
-22 Oct 2026; they are in Git history (commit `d6034a8` and earlier) and can be retrained with
-`--feature-set f9`. Their results were the same as the fifteen-column rows to two decimals (HOIC held
-out 0.212, LOIC-HTTP 0.003). With nine columns, held-out LOIC-UDP was still caught almost entirely through `fwd_bwd_ratio` (its flows
+Earlier models were removed from this version on 22 Oct 2026 (user's request); only the 21-column
+models ship. They are in Git history and can be retrained with `--feature-set f15` or `f9`:
+- fifteen columns (`*_f15`, in history up to commit `c94cb33`): all tools HOIC 0.999, LOIC-HTTP
+  0.987–0.988, LOIC-UDP 0.998–1.000, FPR 0.0091–0.0097; held out HOIC 0.212 / 0.149 / 0.153 (per day /
+  by file / attack period), LOIC-HTTP 0.003, LOIC-UDP 1.000 / 0.994;
+- nine columns (`all_tools`, `hoic_held_out`, …, up to commit `d6034a8`): the same as fifteen columns to
+  two decimals (HOIC held out 0.212, LOIC-HTTP 0.003). With nine columns, held-out LOIC-UDP was still caught almost entirely through `fwd_bwd_ratio` (its flows
 send ~120,000 forward packets per backward packet; HOIC never exceeds 2, 99% of benign flows are
 under 1.7): one extreme feature on 1,730 flows, not evidence of transfer to unseen tools.
 

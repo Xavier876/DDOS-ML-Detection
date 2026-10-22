@@ -104,7 +104,7 @@ def test_f21_model_scores_without_the_syn_column(bundle21):
 def test_f21_is_the_app_default_and_panel_marks_syn(qapp):
     from app.ui.features_dialog import features_html
     from app.ui.main_window import DEFAULT_MODELS
-    assert DEFAULT_MODELS[0] == "all_tools_f21" and "all_tools_f15" in DEFAULT_MODELS   # f15 is the fallback
+    assert DEFAULT_MODELS == ("all_tools_f21",)        # older models were removed from this version
     h = features_html(load_notes(FEATURE_NOTES), None)
     assert "Model features (default set f21): 13 feature groups (21 columns)" in h
     assert "Feature 5: SYN flag count — not in the default set" in h

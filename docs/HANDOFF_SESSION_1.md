@@ -283,3 +283,8 @@ nine-column held-out models were deleted from `DDoSDetector\models\` (the commit
 history up to `d6034a8`; the seed files were never committed). The app no longer falls back to
 `all_tools`. The code can still load a nine-column model opened by hand, and `--feature-set f9`
 still trains one.
+
+**Fifteen-column models removed too (22 Oct 2026, user's request).** The eight `*_f15` models
+(in Git history up to `c94cb33`) and the untracked `all_tools_f15_seed1-4` were deleted; only
+the 12 `*_f21` models ship. The app has no fallback model now: a CSV missing an update-3 column
+gets the missing-column message. The Weeks 1-4 UPDATE3 document says only 21-column models are kept.
