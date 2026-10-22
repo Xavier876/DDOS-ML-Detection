@@ -230,3 +230,50 @@ HOIC 0.212 (per day) / 0.149 (by file), LOIC-HTTP 0.003; baseline FPR 0.0091.
 **Not tested:** the real window by hand (combo boxes, the switch-model dialog, the Features panel
 scrolling); the rebuilt packaged exe could not be started here because Windows Application Control
 blocked the new unsigned exe (not bypassed).
+
+## 10. Update 3: 21 input columns, SYN dropped (22 Oct 2026)
+
+Decided in the project chat (no handoff file): add features 12-15, leave out the initial window size
+(it would be a testbed leak), drop SYN Flag Cnt (0/1 only; no attack flow has a SYN flag), and make
+the 21-column set the default.
+
+| # | Group | Columns |
+|---|---|---|
+| 12 | response size ratio | `bwd_fwd_bytes_ratio` = TotLen Bwd Pkts / (TotLen Fwd Pkts + 1) |
+| 13 | sender timing | `Fwd IAT Mean`, `Fwd IAT Min` |
+| 14 | activity pattern | `Active Mean`, `Idle Mean` (0 in most flows) |
+| 15 | payload signals | `PSH Flag Cnt`, `data_share` = Fwd Act Data Pkts / Tot Fwd Pkts |
+
+**What changed.**
+- Registry: groups 12-15 (non-core, so missing values are allowed); sets `f14` (f15 without SYN) and
+  `f21` (f14 + 12-15). `DEFAULT_FEATURE_SET = "f21"`; `train_model.py` defaults to it (outputs `*_f21`).
+- App default model `all_tools_f21` (falls back to `all_tools_f15`, then `all_tools`). The
+  missing-column dialog now offers the first of those that can score the file (checked headless:
+  a CSV without `PSH Flag Cnt` offers a model that does not need it).
+- Features panel: "Model features (default set f21)", 12-15 under "Added in update 3", feature 5
+  marked "not in the default set". `feature_notes.json`: 12-15 have `"status": "update3"`; their text
+  was drafted in the project chat (replace it if the group rewrites it).
+- Notebook (`ddos_xgboost_starter_v2.ipynb`): 12-15 built in section 6; 9b covers them; 9c adds
+  `all - SYN (14)`, `- SYN +<group>` for each of 12-15 and `- SYN + all candidates (21)`.
+- New Word document `docs\Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx` (the `_UPDATED`
+  one is unchanged): Week 3 (summary and calculation tables, worked example, code, six questions and
+  a data check for 12-15, SYN status, 9c results, limitations, progress) and Week 4 (sections 4, 5 and
+  8: 21 columns, "model score" instead of "confidence score", the f21 results).
+- Tests: 79 pass (`test_update3.py`: sets, formulas, f21 scores without SYN, default model, panel, trained metas).
+
+**Notebook 9c (2 seeds), reported without interpretation:** HOIC per-day recall 0.209 (15 columns),
+0.209 (14), 0.214 (21; seed range 0.207-0.220), false alarms ~19,400 / ~19,400 / ~15,100; HOIC by-file
+0.164 / 0.164 / 0.165; LOIC-HTTP 0.003 for every set. Removing SYN gave identical results to f15.
+
+**Trained f21 models (one seed for held-out, threshold 0.5):**
+
+| Model | Recall | FPR (false alarms) |
+|---|---|---|
+| `all_tools_f21` seeds 0-4 | HOIC 0.999, LOIC-HTTP 0.989-0.990, LOIC-UDP 1.000 | 0.0079-0.0084 |
+| `hoic_held_out_f21` / `_by_file_f21` / `_attack_period_f21` | HOIC 0.214 / 0.180 / 0.153 | 0.0058 (13,191) / 0.0000 (2) / 0.0000 (0) |
+| `loic_http_held_out_f21` / `_attack_period_f21` | LOIC-HTTP 0.003 / 0.003 | 0.0054 / 0.0061 |
+| `loic_udp_held_out_f21` / `_attack_period_f21` | LOIC-UDP 1.000 / 0.994 (1,730 flows) | 0.0070 / 0.0012 (2) |
+
+**Not done / not tested:** the real window by hand; whether the group accepts the wording of 12-15;
+the rest of Week 4 still describes the plan before the first run (section 7 "has not been run yet",
+section 8 "Next: download the files"). Nothing committed.

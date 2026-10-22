@@ -17,8 +17,8 @@ NINE_COLUMN_FINDING = ("Observed with the nine-column model: the model detects D
 FIFTEEN_COLUMN_FRAMING = ("Detection of known tools versus no transfer to unseen tools was observed with the "
                           "nine-column model. Whether that changes with this model's columns is what the "
                           "numbers below report; they come from the training script's own evaluation "
-                          "(model metadata). Features 8 to 11 were added after the first experiments; notebook "
-                          "section 9c and the Feature-set comparison tab report their effect.")
+                          "(model metadata). Features 8 to 11 were added after the first experiments and 12 to 15 "
+                          "in update 3; notebook section 9c and the Feature-set comparison tab report their effect.")
 
 CALIBRATION_NOTE = ("The score is the model's raw output and has not been calibrated. Do not read 0.9 "
                     "as a 90% chance of an attack.")

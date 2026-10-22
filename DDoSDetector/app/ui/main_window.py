@@ -31,7 +31,7 @@ from app.ui.results_table import ResultsData, ResultsTableModel
 from app.workers import Jobs
 
 log = logging.getLogger(__name__)
-DEFAULT_MODELS = ("all_tools_f15", "all_tools")   # first one found is loaded at start-up
+DEFAULT_MODELS = ("all_tools_f21", "all_tools_f15", "all_tools")   # first one found is loaded at start-up
 VERDICT_SHORTCUTS = {rv.CONFIRMED: "Ctrl+1", rv.FALSE_POSITIVE: "Ctrl+2", rv.UNSURE: "Ctrl+3",
                      rv.UNREVIEWED: "Ctrl+0"}
 
@@ -409,7 +409,8 @@ class MainWindow(QMainWindow):
         text = (f"{name} cannot be scored with {model} because these required column(s) are missing:\n\n  • "
                 + "\n  • ".join(missing))
         options = self._models_not_needing(header) if header is not None else []
-        preferred = next((p for p in options if p.name.startswith("all_tools.")), options[0] if options else None)
+        defaults = [self.models_dir / f"{n}.meta.json" for n in DEFAULT_MODELS]   # most columns first
+        preferred = next((p for p in defaults if p in options), options[0] if options else None)
         if preferred is None:
             QMessageBox.critical(self, "Missing columns",
                                  text + "\n\nNo trained model can score this file. The app needs CICFlowMeter "
@@ -526,8 +527,8 @@ class MainWindow(QMainWindow):
         n, n_ddos, n_ns = len(codes), int((codes == CODE_DDOS).sum()), int((codes == CODE_NOT_SCORED).sum())
         n_rev = int((r.review.verdicts != rv.UNREVIEWED).sum())
         parts = [f"<b>{n:,}</b> flows", f"<b>{n_ddos:,}</b> flagged DDoS", f"<b>{n_ns:,}</b> not scored (invalid values)"]
-        if self._n_extra_missing:   # allowed: XGBoost handles missing values in features 8-11
-            parts.append(f"<b>{self._n_extra_missing:,}</b> flows have missing values in features 8 to 11")
+        if self._n_extra_missing:   # allowed: XGBoost handles missing values in features 8-15
+            parts.append(f"<b>{self._n_extra_missing:,}</b> flows have missing values in features 8 to 15")
         parts += [f"<b>{n_rev:,}</b> reviewed", f"showing {self.table_model.rowCount():,}"]
         text = " · ".join(parts)
         if r.tools is not None:

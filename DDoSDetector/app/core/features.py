@@ -4,10 +4,11 @@ The ONE place that defines the model inputs. Training, scoring, SHAP charts, the
 and the tests all read this registry; nothing else lists feature columns. Logic follows
 notebooks/ddos_xgboost_starter_v2.ipynb (sections 5 and 6).
 
-Feature groups are numbered as in Week 3 of the project document (1-6 and 8-11; group 7,
+Feature groups are numbered as in Week 3 of the project document (1-6 and 8-15; group 7,
 flows to the same destination in a window, was dropped because the 21 Feb file has no Dst IP).
-Each model's .meta.json lists the exact `feature_columns` it was trained on, so a 9-column and a
-15-column model both load and score.
+Update 3 added groups 12-15 and dropped group 5 (SYN) from the default set f21 (13 groups, 21
+columns). Each model's .meta.json lists the exact `feature_columns` it was trained on, so 9-, 15-
+and 21-column models all load and score.
 """
 from __future__ import annotations
 
@@ -57,9 +58,20 @@ def _iat_cv(df):    # feature 11: inf (IAT mean of -1 exists in these files) bec
     return pd.DataFrame({"iat_cv": cv.replace([np.inf, -np.inf], np.nan)})
 
 
+def _bytes_ratio(df):    # feature 12 (update 3 candidate): reply bytes per request byte
+    r = df["TotLen Bwd Pkts"].astype("float64") / (df["TotLen Fwd Pkts"].astype("float64") + 1)
+    return pd.DataFrame({"bwd_fwd_bytes_ratio": r})
+
+
+def _payload_signals(df):    # feature 15 (update 3 candidate)
+    share = df["Fwd Act Data Pkts"].astype("float64") / df["Tot Fwd Pkts"].astype("float64")
+    return pd.DataFrame({"PSH Flag Cnt": df["PSH Flag Cnt"].astype("float64"),
+                         "data_share": share.replace([np.inf, -np.inf], np.nan)})
+
+
 @dataclass(frozen=True)
 class FeatureGroup:
-    number: int                         # Week 3 feature number (1-6, 8-11)
+    number: int                         # Week 3 feature number (1-6, 8-15)
     key: str                            # group name used in metadata
     title: str                          # short human title
     output_columns: tuple[str, ...]     # model input columns this group produces
@@ -93,14 +105,25 @@ REGISTRY: tuple[FeatureGroup, ...] = (
                  ("Tot Bwd Pkts", "Fwd Pkt Len Mean"), _indicators, False),
     FeatureGroup(11, "timing_regularity", "Timing regularity", ("iat_cv",),
                  ("Flow IAT Std", "Flow IAT Mean"), _iat_cv, False),
+    # Update 3 (22 Oct 2026): in the default set f21; tested in notebook 9b/9c.
+    FeatureGroup(12, "response_ratio", "Response size ratio", ("bwd_fwd_bytes_ratio",),
+                 ("TotLen Bwd Pkts", "TotLen Fwd Pkts"), _bytes_ratio, False),
+    FeatureGroup(13, "sender_timing", "Sender timing", ("Fwd IAT Mean", "Fwd IAT Min"),
+                 ("Fwd IAT Mean", "Fwd IAT Min"), _as_float(("Fwd IAT Mean", "Fwd IAT Min")), False),
+    FeatureGroup(14, "activity", "Activity pattern", ("Active Mean", "Idle Mean"),
+                 ("Active Mean", "Idle Mean"), _as_float(("Active Mean", "Idle Mean")), False),
+    FeatureGroup(15, "payload_signals", "Payload signals", ("PSH Flag Cnt", "data_share"),
+                 ("PSH Flag Cnt", "Fwd Act Data Pkts", "Tot Fwd Pkts"), _payload_signals, False),
 )
 DROPPED_GROUP_7 = ("Flows to the same destination in a 10 s window: dropped because the 21 Feb file "
                    "has no Dst IP column.")
 
 # Column order matters for a trained model. The original nine come first in the notebook's order
-# (groups 1, 2, 4, 5, 6, then the derived ratio of group 3), then groups 8-11.
-FEATURE_SETS = {"f9": (1, 2, 4, 5, 6, 3), "f15": (1, 2, 4, 5, 6, 3, 8, 9, 10, 11)}
-DEFAULT_FEATURE_SET = "f15"
+# (groups 1, 2, 4, 5, 6, then the derived ratio of group 3), then groups 8-11, then 12-15.
+# f14 = f15 without SYN Flag Cnt (group 5); f21 = f14 + groups 12-15 (update 3, the default).
+FEATURE_SETS = {"f9": (1, 2, 4, 5, 6, 3), "f15": (1, 2, 4, 5, 6, 3, 8, 9, 10, 11),
+                "f14": (1, 2, 4, 6, 3, 8, 9, 10, 11), "f21": (1, 2, 4, 6, 3, 8, 9, 10, 11, 12, 13, 14, 15)}
+DEFAULT_FEATURE_SET = "f21"
 
 _BY_NUMBER = {g.number: g for g in REGISTRY}
 _BY_COLUMN = {c: g for g in REGISTRY for c in g.output_columns}
@@ -120,7 +143,8 @@ def columns_for(feature_set: str) -> list[str]:
 
 FEATURES_F9 = columns_for("f9")      # the original nine columns (legacy models)
 FEATURES_F15 = columns_for("f15")
-ALL_COLUMNS = FEATURES_F15
+FEATURES_F21 = columns_for("f21")    # the default (update 3)
+ALL_COLUMNS = list(dict.fromkeys(FEATURES_F15 + FEATURES_F21))   # every registry column
 CORE_COLUMNS = [c for c in ALL_COLUMNS if group_of(c).core]
 CORE_RAW = list(dict.fromkeys(r for n in FEATURE_SETS["f9"] for r in _BY_NUMBER[n].required_raw))
 ALL_RAW = list(dict.fromkeys(r for g in REGISTRY for r in g.required_raw))
@@ -134,7 +158,7 @@ def groups_for(columns) -> list[FeatureGroup]:
 
 
 def feature_set_of(columns) -> str:
-    """'f9', 'f15' or 'custom' for a model's column list."""
+    """'f9', 'f15', 'f14', 'f21' or 'custom' for a model's column list."""
     for name in FEATURE_SETS:
         if list(columns) == columns_for(name):
             return name
@@ -222,13 +246,13 @@ def build_features(df: pd.DataFrame, columns=None) -> pd.DataFrame:
 
 def valid_mask(X: pd.DataFrame) -> np.ndarray:
     """True for rows whose CORE inputs are all finite (these can be scored).
-    Missing values in features 8-11 are allowed: XGBoost handles them."""
+    Missing values in features 8-15 are allowed: XGBoost handles them."""
     core = [c for c in X.columns if c in _BY_COLUMN and group_of(c).core]
     return np.isfinite(X[core].to_numpy(dtype="float64")).all(axis=1)
 
 
 def extra_missing_mask(X: pd.DataFrame) -> np.ndarray:
-    """True for rows with a missing value in any non-core column (features 8-11)."""
+    """True for rows with a missing value in any non-core column (features 8-15)."""
     extra = [c for c in X.columns if c in _BY_COLUMN and not group_of(c).core]
     if not extra:
         return np.zeros(len(X), dtype=bool)

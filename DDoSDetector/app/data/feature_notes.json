@@ -1,8 +1,8 @@
 {
-  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note).",
+  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note). Features 12-15: Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx' (22 Oct 2026), text drafted in the project chat.",
   "hypothesis_note": "The assumptions below are hypotheses. Where the data did not support an assumption, this is stated.",
   "direction_note": "'Expected' is our reading of each assumption as a direction (higher / lower than benign, or just different), added only so the data can be compared with it. It is not in the Week 3 document; check it with the group. 'none' = the assumption states no direction for that column.",
-  "added_note": "Features 8 to 11 were added after the first experiments, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do.",
+  "added_note": "Features 8 to 11 were added after the first experiments and features 12 to 15 in update 3, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do.",
   "groups": [
     {
       "number": 1,
@@ -57,7 +57,8 @@
       "lookalike": "Yes. Busy servers see many connection openings from normal users.",
       "evasion": "Yes, by completing connections properly or using a different protocol.",
       "notes": ["Limitation: UDP has no TCP flags, so this feature says nothing about LOIC-UDP flows.",
-                "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison."],
+                "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison.",
+                "Update 3 (22 Oct 2026): dropped from the default feature set f21 (and from f14). In this dataset the column holds only 0 or 1, and no attack flow has a SYN flag. Nine- and fifteen-column models still use it."],
       "expected": {"SYN Flag Cnt": "higher"}
     },
     {
@@ -114,8 +115,57 @@
       "evasion": "Yes, easily, by adding random delays (the same weakness as feature 4).",
       "notes": [],
       "expected": {"iat_cv": "lower"}
+    },
+    {
+      "number": 12,
+      "status": "update3",
+      "raw_data": "Bytes sent by the initiator and by the responder (TotLen Fwd Pkts, TotLen Bwd Pkts)",
+      "calculation": "bwd_fwd_bytes_ratio = TotLen Bwd Pkts / (TotLen Fwd Pkts + 1). The +1 only avoids division by zero",
+      "behaviour": "How much data comes back for each byte sent. Feature 3 counts packets; this counts bytes.",
+      "assumption": "A flood gets little data back per byte it sends, while normal browsing gets large responses.",
+      "lookalike": "Yes. Uploads and API writes send more than they receive.",
+      "evasion": "Not directly, because the attacker does not control the replies (the same as feature 8).",
+      "notes": [],
+      "expected": {"bwd_fwd_bytes_ratio": "lower"}
+    },
+    {
+      "number": 13,
+      "status": "update3",
+      "raw_data": "Timestamps of the packets sent by the initiator",
+      "calculation": "Mean and minimum gap between consecutive forward packets (CSV columns Fwd IAT Mean, Fwd IAT Min)",
+      "behaviour": "The timing the sender controls. Feature 4 mixes in the server's replies; these do not.",
+      "assumption": "Attack tools send their own packets in quick succession, so the forward gaps are smaller.",
+      "lookalike": "Yes. Polling clients and scripts also send quickly and regularly.",
+      "evasion": "Yes, by adding delays between packets.",
+      "notes": [],
+      "expected": {"Fwd IAT Mean": "lower", "Fwd IAT Min": "lower"}
+    },
+    {
+      "number": 14,
+      "status": "update3",
+      "raw_data": "Timestamps of every packet in the flow",
+      "calculation": "Mean length of the active and of the idle periods in the flow (CSV columns Active Mean, Idle Mean)",
+      "behaviour": "Whether the flow sends continuously or in bursts separated by pauses.",
+      "assumption": "Floods send continuously, while people leave idle gaps between bursts.",
+      "lookalike": "Yes. Streaming and keep-alive traffic also have long active or idle periods.",
+      "evasion": "Yes, by pausing between bursts.",
+      "notes": ["Data note: both columns are 0 in most flows (about 85-89% in a sample), because CICFlowMeter only records active/idle periods for long flows."],
+      "expected": {"Active Mean": "different", "Idle Mean": "lower"}
+    },
+    {
+      "number": 15,
+      "status": "update3",
+      "raw_data": "TCP flags and payload sizes of the packets sent by the initiator",
+      "calculation": "PSH Flag Cnt (0/1 in this dataset), and data_share = Fwd Act Data Pkts / Tot Fwd Pkts",
+      "behaviour": "Whether the sender pushes data in its packets, and what share of its packets carry data.",
+      "assumption": "HTTP floods push a request in almost every packet, so most forward packets carry data.",
+      "lookalike": "Yes. Chatty applications also carry data in most packets.",
+      "evasion": "Yes, at the cost of more effort per packet.",
+      "notes": ["Proposed as a more informative replacement for feature 5 (SYN flag count). Limitation: UDP has no TCP flags, so PSH says nothing about LOIC-UDP flows."],
+      "expected": {"PSH Flag Cnt": "higher", "data_share": "higher"}
     }
   ],
+  "update3_note": "Features 12-15 were added in update 3 (22 Oct 2026) and are inputs of the default 21-column model. Their text was drafted in the project chat and is the same as in Week 3 of the UPDATE3 document; replace it if the group rewrites it. Notebook sections 9b and 9c test them.",
   "dropped": {
     "number": 7,
     "title": "Flows to the same destination in a window",

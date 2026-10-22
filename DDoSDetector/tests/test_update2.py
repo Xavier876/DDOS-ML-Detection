@@ -31,7 +31,7 @@ EXPECTED_F15 = ["Flow Pkts/s", "Flow Byts/s", "Flow Duration", "Flow IAT Mean", 
 def test_registry_column_order_and_groups():
     assert F.columns_for("f15") == EXPECTED_F15          # order matters for a trained model
     assert F.columns_for("f9") == EXPECTED_F15[:9]
-    assert [g.number for g in F.REGISTRY] == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]   # no group 7
+    assert [g.number for g in F.REGISTRY] == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15]   # no group 7
     assert F.summary(F.FEATURES_F15) == "10 feature groups (15 columns)"
     assert F.column_label("empty_payload") == "empty_payload (F10)"
     assert F.feature_set_of(EXPECTED_F15) == "f15" and F.feature_set_of(EXPECTED_F15[:9]) == "f9"
@@ -226,7 +226,7 @@ def test_features_panel_lists_ten_groups(tmp_path, qapp):
     notes = load_notes(FEATURE_NOTES)
     without = features_html(notes, None)
     numbers = [int(n) for n in re.findall(r"<h3>Feature (\d+):", without)]
-    assert numbers == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 7]           # 7 listed last, as dropped
+    assert numbers == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 7]   # update-3 groups, then 7 as dropped
     assert "Run notebook section 9b" in without and "<td>0." not in without   # no numbers invented
     ev = pd.DataFrame([{"attack": "HOIC", "feature": "no_reply", "attack_median": 1.0,
                         "benign_median_same_day": 0.0, "direction": "higher", "attack_zero_share": 0.2,
@@ -237,9 +237,9 @@ def test_features_panel_lists_ten_groups(tmp_path, qapp):
     assert "supported</b>: attacks are higher (AUC 0.85)" in with_ev
 
 
-def test_no_claim_that_features_8_to_11_help():
+def test_no_claim_that_features_8_to_15_help():
     """Acceptance 22: scan app text and the README."""
-    bad = re.compile(r"(features? 8 (to|-|–) 11|new features?|added features?)[^.\n]{0,60}"
+    bad = re.compile(r"(features? (8|12) (to|-|–) (11|15)|new features?|added features?)[^.\n]{0,60}"
                      r"\b(improv|help(s|ed)? (detect|the model)|better|boost)", re.IGNORECASE)
     texts = [p.read_text(encoding="utf-8") for p in (PROJECT_DIR / "app").rglob("*.py")]
     texts.append((PROJECT_DIR / "app" / "data" / "feature_notes.json").read_text(encoding="utf-8"))

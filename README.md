@@ -5,14 +5,14 @@ scores every flow with an XGBoost model (**flag** Benign / DDoS + **model score*
 explains the model with **SHAP** charts, and supports an analyst review and feedback loop.
 
 > **Observed with the nine-column model:** it detects DDoS tools it was trained on but does not
-> transfer to unseen tools. For the fifteen-column model, the app and the training script report the
-> numbers; see Help → About / Model card and the Held-out comparison tab.
+> transfer to unseen tools. For the fifteen- and twenty-one-column models, the app and the training script
+> report the numbers; see Help → About / Model card and the Held-out comparison tab.
 
 The model score is the model's raw output and has not been calibrated (training uses
 `scale_pos_weight`), so it is not a probability: do not read 0.9 as a 90% chance of an attack.
 
-**Model inputs: 10 feature groups (15 columns)**, numbered as in Week 3 of the project document
-(feature 7 was dropped):
+**Model inputs (default, update 3): 13 feature groups (21 columns)**, numbered as in Week 3 of the
+project document. Feature 7 was dropped, and update 3 dropped feature 5 (SYN flag count) from the default:
 
 | # | Group | Columns |
 |---|---|---|
@@ -20,19 +20,29 @@ The model score is the model's raw output and has not been calibrated (training 
 | 2 | duration | `Flow Duration` |
 | 3 | forward/backward ratio | `fwd_bwd_ratio` = `Tot Fwd Pkts / (Tot Bwd Pkts + 1)` |
 | 4 | inter-arrival time | `Flow IAT Mean`, `Flow IAT Std` |
-| 5 | SYN flag count | `SYN Flag Cnt` |
+| 5 | *not in the default set* | `SYN Flag Cnt` (0/1 only; no attack flow has it). Still used by nine- and fifteen-column models |
 | 6 | forward packet length | `Fwd Pkt Len Mean`, `Fwd Pkt Len Std` |
 | 7 | *dropped* | flows to the same destination in a 10 s window: the 21 Feb file has no `Dst IP` |
 | 8 | reply behaviour | `Bwd Pkt Len Mean` |
 | 9 | connection-ending flags | `RST Flag Cnt`, `FIN Flag Cnt` |
 | 10 | indicators | `no_reply` = (`Tot Bwd Pkts` == 0), `empty_payload` = (`Fwd Pkt Len Mean` == 0) |
 | 11 | timing regularity | `iat_cv` = `Flow IAT Std / (Flow IAT Mean + 1)` (infinite → missing) |
+| 12 | response size ratio | `bwd_fwd_bytes_ratio` = `TotLen Bwd Pkts / (TotLen Fwd Pkts + 1)` |
+| 13 | sender timing | `Fwd IAT Mean`, `Fwd IAT Min` |
+| 14 | activity pattern | `Active Mean`, `Idle Mean` (0 in most flows) |
+| 15 | payload signals | `PSH Flag Cnt`, `data_share` = `Fwd Act Data Pkts / Tot Fwd Pkts` (0/0 → missing) |
 
-Groups 1–6 are the original nine columns; 8–11 were added after the first experiments. Notebook
-section 9c measures whether they help. They are all defined in **one registry**,
-`DDoSDetector\app\core\features.py`, which training, scoring, SHAP, the Features panel and the tests read.
-Each model's `.meta.json` lists its exact `feature_columns`, so nine- and fifteen-column models both
-load and score (models without that field are treated as the original nine).
+Groups 1–6 are the original nine columns; 8–11 were added after the first experiments and 12–15 in
+update 3 (22 Oct 2026; their text was drafted in the project chat and is in Week 3 of
+`docs\Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx`). Notebook sections 9b/9c measure whether
+they help; the first comparison showed no recall change larger than the spread between seeds.
+
+Feature sets in the registry: `f9` (original nine), `f15` (groups 1–6 and 8–11), `f14` (`f15` without
+SYN Flag Cnt), `f21` (`f14` + groups 12–15, **the default**). Train any of them with `--feature-set`.
+They are all defined in **one registry**, `DDoSDetector\app\core\features.py`, which training, scoring,
+SHAP, the Features panel and the tests read. Each model's `.meta.json` lists its exact
+`feature_columns`, so nine-, fifteen- and twenty-one-column models all load and score (models without
+that field are treated as the original nine).
 
 This is a university demo, not a production IDS.
 
@@ -96,13 +106,14 @@ right-click → Add → Existing Item.
 ```
 
 - **File → Open flows CSV…** reads in the background (progress bar + Cancel). The CSV must contain
-  the raw columns the **active model** needs (for the fifteen-column model also `Bwd Pkt Len Mean`,
-  `RST Flag Cnt`, `FIN Flag Cnt`). If some are missing, a dialog names them and, when another model
+  the raw columns the **active model** needs (for the default 21-column model also `Bwd Pkt Len Mean`,
+  `RST Flag Cnt`, `FIN Flag Cnt`, `TotLen Fwd Pkts`, `TotLen Bwd Pkts`, `Fwd IAT Mean`, `Fwd IAT Min`,
+  `Active Mean`, `Idle Mean`, `PSH Flag Cnt`, `Fwd Act Data Pkts`). If some are missing, a dialog names them and, when another model
   doesn't need them (e.g. the nine-column `all_tools`), offers to score with that model instead; it
   never scores with fewer features silently. `Label` and `Timestamp` are optional. Rows with
   NaN/infinite values in the original nine columns are kept and shown as **Not scored**; missing
-  values in features 8–11 are allowed (XGBoost handles them) and counted in the summary bar.
-- The default model is `all_tools_f15` (falls back to `all_tools`). The status bar shows the model's
+  values in features 8–15 are allowed (XGBoost handles them) and counted in the summary bar.
+- The default model is `all_tools_f21` (falls back to `all_tools_f15`, then `all_tools`). The status bar shows the model's
   name, its feature set and version.
 - **Threshold** slider/spin box re-flags instantly. Filter by flag and by model-score range
   (the *Uncertain* button shows 0.2–0.8). Click a column header to sort.
@@ -138,8 +149,8 @@ right-click → Add → Existing Item.
 - **Flash-crowd check** (needs `Label`): false positive rate on all benign flows vs benign flows at or
   above a percentile (default 99th) of `Flow Pkts/s` and `Flow Byts/s`. The dataset has no labelled
   flash crowd, so high-rate benign flows are a proxy.
-- **Help → Features…** lists the 10 feature groups (1–6, 8–11, and 7 as dropped) with the group's
-  Week 3 text (raw data, calculation, security behaviour, assumption, legitimate look-alike, evasion,
+- **Help → Features…** lists the feature groups (1–6, 8–15, and 7 as dropped; 5 is marked as not in
+  the default set, 12–15 under "Added in update 3") with the Week 3 text (raw data, calculation, security behaviour, assumption, legitimate look-alike, evasion,
   notes), and for every column *what the data showed*: medians against benign flows from the same
   file, zero shares and single-feature AUC from `app\data\feature_evidence.csv` (notebook section 9b),
   with a computed verdict in plain words (supported / not supported so far / opposite of the
@@ -182,19 +193,19 @@ Units: the table's model score is a number from 0 to 1 (not calibrated); SHAP va
    .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --extra-labelled feedback_x.csv
    ```
    The feedback rows are added to the training split only (the test split stays comparable) and the
-   new model is saved as `all_tools_f15_feedback` (use `--name` to change it), so the shipped model is
+   new model is saved as `all_tools_f21_feedback` (use `--name` to change it), so the shipped model is
    not overwritten. Open it from the Model menu.
 
 ## Train
 
 ```powershell
-.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools                    # 15 columns
+.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools                    # 21 columns (default)
 .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --feature-set f9   # original nine
 .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode hoic_held_out
 ```
 
-`--feature-set f15` (default) trains on all fifteen columns and names the output `<setup>_f15`;
-`f9` keeps the original names (`all_tools`, `hoic_held_out`, …). As in the notebook, rows with
+`--feature-set f21` (default) trains on the 21 columns and names the output `<setup>_f21` (`f15` →
+`<setup>_f15`, `f14` → `<setup>_f14`); `f9` keeps the original names (`all_tools`, `hoic_held_out`, …). As in the notebook, rows with
 missing/infinite values in the original columns are dropped for training, duplicates are judged on
 the original columns only, and missing values in the new columns are left for XGBoost. If a file
 lacks a new raw column, the script prints it and leaves that group out (recorded in the metadata).
@@ -227,6 +238,18 @@ quick run on the first N rows of each file. Each model's metadata records its me
 and test-prediction time (shown in Help → About).
 
 Models in `DDoSDetector\models\` now (each model's own test split, threshold 0.5, from its metadata).
+
+Twenty-one columns (`*_f21`, the default):
+
+| Model | Recall on the tool | FPR (false alarms) |
+|---|---|---|
+| `all_tools_f21` (seeds 0–4) | HOIC 0.999, LOIC-HTTP 0.989–0.990, LOIC-UDP 1.000 | 0.0079–0.0084 |
+| `hoic_held_out_f21` / `_by_file_f21` / `_attack_period_f21` | HOIC 0.214 / 0.180 / 0.153 | 0.0058 (13,191) / 0.0000 (2) / 0.0000 (0) |
+| `loic_http_held_out_f21` / `_attack_period_f21` | LOIC-HTTP 0.003 / 0.003 | 0.0054 (12,310) / 0.0061 (35,177) |
+| `loic_udp_held_out_f21` / `_attack_period_f21` | LOIC-UDP 1.000 / 0.994 (1,730 flows) | 0.0070 (15,848) / 0.0012 (2) |
+
+Each held-out row is one seed; differences from the fifteen-column rows below may be within the
+seed-to-seed spread (notebook 9c measures that).
 
 Fifteen columns (`*_f15`):
 

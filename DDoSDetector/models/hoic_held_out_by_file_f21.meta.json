@@ -1,0 +1,247 @@
+{
+  "title": "HOIC held out (trained on LOIC-HTTP + LOIC-UDP + benign; by-file benign split), 13 feature groups (21 columns)",
+  "feature_columns": [
+    "Flow Pkts/s",
+    "Flow Byts/s",
+    "Flow Duration",
+    "Flow IAT Mean",
+    "Flow IAT Std",
+    "Fwd Pkt Len Mean",
+    "Fwd Pkt Len Std",
+    "fwd_bwd_ratio",
+    "Bwd Pkt Len Mean",
+    "RST Flag Cnt",
+    "FIN Flag Cnt",
+    "no_reply",
+    "empty_payload",
+    "iat_cv",
+    "bwd_fwd_bytes_ratio",
+    "Fwd IAT Mean",
+    "Fwd IAT Min",
+    "Active Mean",
+    "Idle Mean",
+    "PSH Flag Cnt",
+    "data_share"
+  ],
+  "feature_groups": [
+    {
+      "number": 1,
+      "key": "rate",
+      "title": "Packet and byte rate",
+      "columns": [
+        "Flow Pkts/s",
+        "Flow Byts/s"
+      ]
+    },
+    {
+      "number": 2,
+      "key": "duration",
+      "title": "Flow duration",
+      "columns": [
+        "Flow Duration"
+      ]
+    },
+    {
+      "number": 3,
+      "key": "fwd_bwd_ratio",
+      "title": "Forward to backward packet ratio",
+      "columns": [
+        "fwd_bwd_ratio"
+      ]
+    },
+    {
+      "number": 4,
+      "key": "inter_arrival",
+      "title": "Inter-arrival time",
+      "columns": [
+        "Flow IAT Mean",
+        "Flow IAT Std"
+      ]
+    },
+    {
+      "number": 6,
+      "key": "fwd_pkt_len",
+      "title": "Forward packet length",
+      "columns": [
+        "Fwd Pkt Len Mean",
+        "Fwd Pkt Len Std"
+      ]
+    },
+    {
+      "number": 8,
+      "key": "reply",
+      "title": "Reply behaviour",
+      "columns": [
+        "Bwd Pkt Len Mean"
+      ]
+    },
+    {
+      "number": 9,
+      "key": "conn_end_flags",
+      "title": "Connection-ending flags",
+      "columns": [
+        "RST Flag Cnt",
+        "FIN Flag Cnt"
+      ]
+    },
+    {
+      "number": 10,
+      "key": "indicators",
+      "title": "No-reply and empty-payload indicators",
+      "columns": [
+        "no_reply",
+        "empty_payload"
+      ]
+    },
+    {
+      "number": 11,
+      "key": "timing_regularity",
+      "title": "Timing regularity",
+      "columns": [
+        "iat_cv"
+      ]
+    },
+    {
+      "number": 12,
+      "key": "response_ratio",
+      "title": "Response size ratio",
+      "columns": [
+        "bwd_fwd_bytes_ratio"
+      ]
+    },
+    {
+      "number": 13,
+      "key": "sender_timing",
+      "title": "Sender timing",
+      "columns": [
+        "Fwd IAT Mean",
+        "Fwd IAT Min"
+      ]
+    },
+    {
+      "number": 14,
+      "key": "activity",
+      "title": "Activity pattern",
+      "columns": [
+        "Active Mean",
+        "Idle Mean"
+      ]
+    },
+    {
+      "number": 15,
+      "key": "payload_signals",
+      "title": "Payload signals",
+      "columns": [
+        "PSH Flag Cnt",
+        "data_share"
+      ]
+    }
+  ],
+  "feature_set": "f21",
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "held_out",
+  "setup": "hoic_held_out_by_file_f21",
+  "held_out_tool": "HOIC",
+  "benign_split_mode": "by_file",
+  "benign_split": "by_file: benign of the earlier file trains, benign of the later file tests",
+  "timing": {
+    "train_seconds": 9.72,
+    "train_rows": 1577904,
+    "predict_seconds": 1.058,
+    "predict_rows": 1029269,
+    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
+  },
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_TrafficForML_CICFlowMeter.csv",
+    "Wednesday-21-02-2018_TrafficForML_CICFlowMeter.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "rows_after_cleaning": {
+    "Benign": 7542570,
+    "HOIC": 668461,
+    "LOIC-HTTP": 576174,
+    "LOIC-UDP": 1730
+  },
+  "train_rows": {
+    "Benign": 1000000,
+    "LOIC-HTTP": 576174,
+    "LOIC-UDP": 1730
+  },
+  "test_rows": {
+    "HOIC": 668461,
+    "Benign": 360808
+  },
+  "hyperparameters": {
+    "n_estimators": 300,
+    "max_depth": 6,
+    "learning_rate": 0.1,
+    "tree_method": "hist",
+    "scale_pos_weight": 1.7303912068440432,
+    "n_jobs": -1,
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 360808,
+    "n_test_attack": 668461,
+    "recall": {
+      "HOIC": 0.1805
+    },
+    "n_test": {
+      "HOIC": 668461
+    },
+    "fpr": 0.0,
+    "false_alarms": 2,
+    "pr_auc": 0.9977,
+    "roc_auc": 0.9958,
+    "base_rate": 0.6495,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 0.1805,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.2,
+        "recall": 0.2797,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.1,
+        "recall": 0.367,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.05,
+        "recall": 0.367,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.01,
+        "recall": 0.3868,
+        "fpr": 0.0
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-10-22T17:35:31+00:00",
+  "background_file": "hoic_held_out_by_file_f21.background.parquet",
+  "model_file": "hoic_held_out_by_file_f21.json",
+  "version": "b618eaf290"
+}

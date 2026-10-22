@@ -85,6 +85,6 @@ class HeldOutComparison(ChartPlugin):
                 "fwd_bwd_ratio (~120,000 vs under 2 for HOIC and benign): one extreme feature, not general transfer."
                 if fset == "f9" else
                 "LOIC-UDP has only about 1,730 flows, so its bars are a stress test, not a reliable number.")
-        S.title(figure, figure.axes[0], f"Does the model detect a DDoS tool it never saw? ({summary(model_columns(ctx.model_meta))})",
-                "Numbers from each model's own metadata (its own test split). Seen in training = optimistic upper "
+        S.title(figure, figure.axes[0], "Does the model detect a DDoS tool it never saw?",
+                f"Models with {summary(model_columns(ctx.model_meta))}. Numbers from each model's own metadata (its own test split). Seen in training = optimistic upper "
                 "bound (random split); tool and capture day are confounded. " + note)

@@ -13,7 +13,7 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayo
 
 from app.core.feature_notes import (AUC_MARGIN, MISSING_EVIDENCE, NO_DIRECTION, NOT_SUPPORTED, OPPOSITE,
                                     SUPPORTED, UNCLEAR, assess, load_evidence, load_notes, notes_by_number)
-from app.core.features import REGISTRY, summary, ALL_COLUMNS
+from app.core.features import DEFAULT_FEATURE_SET, FEATURE_SETS, REGISTRY, columns_for, summary
 from app.paths import FEATURE_EVIDENCE, FEATURE_NOTES
 
 _VERDICT_STYLE = {SUPPORTED: "#0b7a0b", OPPOSITE: "#c0392b", NOT_SUPPORTED: "#b85c00", UNCLEAR: "#52514e",
@@ -53,7 +53,9 @@ def evidence_html(evidence: pd.DataFrame | None, column: str, expected: str) -> 
 
 def features_html(notes: dict, evidence: pd.DataFrame | None) -> str:
     by_num = notes_by_number(notes)
-    out = [f"<h2>Model features: {html.escape(summary(ALL_COLUMNS))}</h2>",
+    default = FEATURE_SETS[DEFAULT_FEATURE_SET]
+    out = [f"<h2>Model features (default set {DEFAULT_FEATURE_SET}): "
+           f"{html.escape(summary(columns_for(DEFAULT_FEATURE_SET)))}</h2>",
            f"<p style='padding:6px; background:#fff4e5; border-left:4px solid #b85c00'>"
            f"<b>{html.escape(notes['hypothesis_note'])}</b></p>",
            f"<p style='color:#52514e'>Source: {html.escape(notes.get('source', ''))}</p>",
@@ -72,7 +74,12 @@ def features_html(notes: dict, evidence: pd.DataFrame | None) -> str:
                "when it does not separate on its own.</p>")
     for g in REGISTRY:
         n = by_num[g.number]
-        out.append(f"<h3>Feature {g.number}: {html.escape(g.title)} "
+        if n.get("status") == "update3" and not any(by_num[p.number].get("status") == "update3"
+                                                    for p in REGISTRY if p.number < g.number):
+            out.append(f"<h2>Added in update 3</h2>"
+                       f"<p style='color:#b85c00'>⚠ {html.escape(notes.get('update3_note', ''))}</p>")
+        not_default = "" if g.number in default else " — not in the default set"
+        out.append(f"<h3>Feature {g.number}: {html.escape(g.title)}{not_default} "
                    f"<span style='color:#52514e; font-weight:normal'>({html.escape(', '.join(g.output_columns))})</span></h3>")
         out.append("<table cellpadding='2'>")
         for key, label in _FIELDS:
