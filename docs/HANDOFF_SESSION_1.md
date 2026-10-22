@@ -288,3 +288,19 @@ still trains one.
 (in Git history up to `c94cb33`) and the untracked `all_tools_f15_seed1-4` were deleted; only
 the 12 `*_f21` models ship. The app has no fallback model now: a CSV missing an update-3 column
 gets the missing-column message. The Weeks 1-4 UPDATE3 document says only 21-column models are kept.
+
+## 11. Hybrid experiment, notebook section 9d (22 Oct 2026)
+
+Section 9d adds an Isolation Forest trained on benign training flows only (log-scaled 21 columns, threshold
+from held-back benign flows at the 99th / 99.9th percentile) next to the 21-column XGBoost, on the same
+splits and seeds as 9c. Reported without interpretation (mean of 2 seeds; local CSV
+`DDoSDetector\models\hybrid_comparison.csv`, git-ignored):
+
+| Held out / benign split | XGBoost only: recall, false alarms | Anomaly only (99% / 99.9%): recall, false alarms | Either flags (99% / 99.9%): recall, false alarms |
+|---|---|---|---|
+| HOIC / per day | 0.214, 15,106 | 0.000, 24,370 / 0.000, 1,988 | 0.214, 39,475 / 0.214, 17,093 |
+| HOIC / by file | 0.165, 2 | 0.000, 1,816 / 0.000, 1 | 0.165, 1,818 / 0.165, 3 |
+| LOIC-HTTP / per day | 0.003, 12,511 | 0.000, 24,370 / 0.000, 1,988 | 0.003, 36,880 / 0.003, 14,498 |
+
+The anomaly layer flagged no held-out attack flows that XGBoost missed (`review_attack_share` 0.0), and
+added benign false alarms. Not in the app; Week 4 is unchanged.
