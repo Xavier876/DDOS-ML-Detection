@@ -14,6 +14,7 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayo
 from app.core.feature_notes import (AUC_MARGIN, MISSING_EVIDENCE, NO_DIRECTION, NOT_SUPPORTED, OPPOSITE,
                                     SUPPORTED, UNCLEAR, assess, load_evidence, load_notes, notes_by_number)
 from app.core.features import DEFAULT_FEATURE_SET, FEATURE_SETS, REGISTRY, columns_for, summary
+from app.core.numbers import readable
 from app.paths import FEATURE_EVIDENCE, FEATURE_NOTES
 
 _VERDICT_STYLE = {SUPPORTED: "#0b7a0b", OPPOSITE: "#c0392b", NOT_SUPPORTED: "#b85c00", UNCLEAR: "#52514e",
@@ -25,7 +26,7 @@ _FIELDS = [("raw_data", "Raw data needed"), ("calculation", "How it is calculate
 
 
 def _num(v) -> str:
-    return "n/a" if pd.isna(v) else f"{v:.4g}"
+    return "n/a" if pd.isna(v) else readable(v)
 
 
 def evidence_html(evidence: pd.DataFrame | None, column: str, expected: str) -> str:

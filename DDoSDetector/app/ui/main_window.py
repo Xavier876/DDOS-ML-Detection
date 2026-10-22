@@ -393,6 +393,17 @@ class MainWindow(QMainWindow):
             return
         QMessageBox.critical(self, "Something went wrong", f"{e}\n\nDetails are in logs/app.log.")
 
+    def _fit_columns_to_headers(self):
+        """Widen columns whose labelled header (e.g. 'bwd_fwd_bytes_ratio (F12)') or first value
+        (e.g. a timestamp) does not fit. Only row 0 is measured, so 1M rows stays fast."""
+        head, m = self.table.horizontalHeader(), self.table_model
+        fm_head, fm_cell = head.fontMetrics(), self.table.fontMetrics()
+        for i in range(m.columnCount()):
+            title = str(m.headerData(i, Qt.Orientation.Horizontal) or "")
+            first = str(m.data(m.index(0, i)) or "") if m.rowCount() else ""
+            need = max(fm_head.horizontalAdvance(title) + 28, fm_cell.horizontalAdvance(first) + 16)   # + sort arrow
+            head.resizeSection(i, max(head.defaultSectionSize(), need))
+
     def _models_not_needing(self, header) -> list[Path]:
         """Models in the models folder whose required raw columns the CSV header has."""
         out = []
@@ -453,6 +464,7 @@ class MainWindow(QMainWindow):
         self.table_model.threshold = self.thr.value()
         self.table_model.set_results(self.results)
         self.table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+        self._fit_columns_to_headers()
         self._filters_changed()
         self._data_id += 1
 

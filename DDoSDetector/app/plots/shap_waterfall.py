@@ -7,6 +7,7 @@ import numpy as np
 
 from app.core.explain import sigmoid
 from app.core.features import column_label
+from app.core.numbers import readable
 
 from . import _style as S
 from .base import ChartPlugin, message, register
@@ -50,7 +51,7 @@ class ShapWaterfall(ChartPlugin):
                 ax.plot([s, s], [y + 0.3, y + 0.7], color=S.THEME["axis"], linewidth=0.8)
         ax.set_yticks(range(len(order)))
         ax.set_yticklabels([f"{column_label(names[i])} = "
-                            + ("missing" if np.isnan(x.iloc[i]) else f"{x.iloc[i]:.4g}") for i in order],
+                            + readable(x.iloc[i]) for i in order],
                            fontsize=8 if len(order) > 10 else 8.5)
         ax.axvline(base, color=S.THEME["muted"], linewidth=1, linestyle=":")
         ax.axvline(fx, color=S.THEME["ink"], linewidth=1.2)

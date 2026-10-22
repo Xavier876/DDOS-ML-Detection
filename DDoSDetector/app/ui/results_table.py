@@ -14,6 +14,7 @@ from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor
 
 from app.core.features import column_label
+from app.core.numbers import readable
 from app.core.review import CONFIRMED, FALSE_POSITIVE, UNSURE, VERDICTS, Review
 from app.core.scoring import CODE_DDOS, CODE_NOT_SCORED, FLAG_NAMES, flag_codes
 
@@ -218,7 +219,7 @@ class ResultsTableModel(QAbstractTableModel):
             if name == "Timestamp":
                 return str(d.timestamps[pos])
             v = self._Xv[pos, self._feature_col[name]]
-            return "missing" if np.isnan(v) else f"{v:.6g}"
+            return readable(v)
         if role == Qt.ItemDataRole.BackgroundRole:
             if name == FLAG:
                 return _FLAG_BG.get(int(self.codes[pos]))
@@ -231,6 +232,9 @@ class ResultsTableModel(QAbstractTableModel):
                 return "Not scored (invalid values: NaN or infinite in a model input)"
             if name == NOTE and pos in d.review.notes:
                 return d.review.notes[pos]
+            if name in self._feature_col:          # the exact value behind the rounded one
+                v = self._Xv[pos, self._feature_col[name]]
+                return None if np.isnan(v) else repr(float(v))
         return None
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):
