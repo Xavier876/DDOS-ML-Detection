@@ -1,41 +1,27 @@
-"""Cleaning and feature building.
+"""Feature registry, cleaning and feature building.
 
-Single source of truth for the model inputs: used by train/train_model.py AND the app,
-so training and inference cannot drift apart. Logic follows ddos_xgboost_starter_v2.ipynb.
+The ONE place that defines the model inputs. Training, scoring, SHAP charts, the Features panel
+and the tests all read this registry; nothing else lists feature columns. Logic follows
+notebooks/ddos_xgboost_starter_v2.ipynb (sections 5 and 6).
+
+Feature groups are numbered as in Week 3 of the project document (1-6 and 8-11; group 7,
+flows to the same destination in a window, was dropped because the 21 Feb file has no Dst IP).
+Each model's .meta.json lists the exact `feature_columns` it was trained on, so a 9-column and a
+15-column model both load and score.
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Callable
 
 import numpy as np
 import pandas as pd
 
 LABEL, TIME = "Label", "Timestamp"
-
-BASE_FEATURES = [
-    "Flow Pkts/s", "Flow Byts/s", "Flow Duration",
-    "Flow IAT Mean", "Flow IAT Std", "SYN Flag Cnt",
-    "Fwd Pkt Len Mean", "Fwd Pkt Len Std",
-]
-COUNT_COLS = ["Tot Fwd Pkts", "Tot Bwd Pkts"]  # only used to build fwd_bwd_ratio
-FEATURES = BASE_FEATURES + ["fwd_bwd_ratio"]   # exactly 9 model inputs, in this order
-
-# 6 feature groups (9 columns). The planned 7th group, flows to the same destination in a
-# 10 s window, was dropped: the 21 Feb file has no Dst IP.
-FEATURE_GROUPS = {
-    "Rate": ["Flow Pkts/s", "Flow Byts/s"],
-    "Duration": ["Flow Duration"],
-    "Forward/backward ratio": ["fwd_bwd_ratio"],
-    "Inter-arrival time": ["Flow IAT Mean", "Flow IAT Std"],
-    "SYN flag count": ["SYN Flag Cnt"],
-    "Forward packet length": ["Fwd Pkt Len Mean", "Fwd Pkt Len Std"],
-}
-FEATURE_SUMMARY = "6 feature groups (9 columns)"
+OPTIONAL_COLUMNS = [LABEL, TIME]
 
 # Kept for tracing alerts back to hosts when present. NEVER model inputs.
 TRACING_COLUMNS = {"Src IP": "src_ip", "Dst IP": "dst_ip", "Dst Port": "dst_port"}
-
-# Columns the input CSV must contain to be scored (Label / Timestamp are optional).
-REQUIRED_COLUMNS = BASE_FEATURES + COUNT_COLS
-OPTIONAL_COLUMNS = [LABEL, TIME]
 
 TOOLS = ["Benign", "HOIC", "LOIC-HTTP", "LOIC-UDP"]
 ATTACK_TOOLS = ["HOIC", "LOIC-HTTP", "LOIC-UDP"]
@@ -50,6 +36,127 @@ LABEL_MAPPING = {
 }
 
 
+# --- the registry -----------------------------------------------------------------------
+def _as_float(cols):
+    return lambda df: df[list(cols)].astype("float64")
+
+
+def _ratio(df):    # feature 3
+    return pd.DataFrame({"fwd_bwd_ratio": df["Tot Fwd Pkts"].astype("float64")
+                         / (df["Tot Bwd Pkts"].astype("float64") + 1)})
+
+
+def _indicators(df):    # feature 10 (NaN inputs stay NaN rather than becoming 0)
+    bwd, fwd = df["Tot Bwd Pkts"].astype("float64"), df["Fwd Pkt Len Mean"].astype("float64")
+    return pd.DataFrame({"no_reply": (bwd == 0).astype("float64").where(bwd.notna()),
+                         "empty_payload": (fwd == 0).astype("float64").where(fwd.notna())})
+
+
+def _iat_cv(df):    # feature 11: inf (IAT mean of -1 exists in these files) becomes missing
+    cv = df["Flow IAT Std"].astype("float64") / (df["Flow IAT Mean"].astype("float64") + 1)
+    return pd.DataFrame({"iat_cv": cv.replace([np.inf, -np.inf], np.nan)})
+
+
+@dataclass(frozen=True)
+class FeatureGroup:
+    number: int                         # Week 3 feature number (1-6, 8-11)
+    key: str                            # group name used in metadata
+    title: str                          # short human title
+    output_columns: tuple[str, ...]     # model input columns this group produces
+    required_raw: tuple[str, ...]       # CSV columns needed to build them
+    build: Callable[[pd.DataFrame], pd.DataFrame]
+    core: bool                          # original nine columns: NaN/inf there -> row "Not scored"
+
+    @property
+    def label(self) -> str:
+        return f"F{self.number} {self.title}"
+
+
+REGISTRY: tuple[FeatureGroup, ...] = (
+    FeatureGroup(1, "rate", "Packet and byte rate", ("Flow Pkts/s", "Flow Byts/s"),
+                 ("Flow Pkts/s", "Flow Byts/s"), _as_float(("Flow Pkts/s", "Flow Byts/s")), True),
+    FeatureGroup(2, "duration", "Flow duration", ("Flow Duration",), ("Flow Duration",),
+                 _as_float(("Flow Duration",)), True),
+    FeatureGroup(3, "fwd_bwd_ratio", "Forward to backward packet ratio", ("fwd_bwd_ratio",),
+                 ("Tot Fwd Pkts", "Tot Bwd Pkts"), _ratio, True),
+    FeatureGroup(4, "inter_arrival", "Inter-arrival time", ("Flow IAT Mean", "Flow IAT Std"),
+                 ("Flow IAT Mean", "Flow IAT Std"), _as_float(("Flow IAT Mean", "Flow IAT Std")), True),
+    FeatureGroup(5, "syn_flag", "SYN flag count", ("SYN Flag Cnt",), ("SYN Flag Cnt",),
+                 _as_float(("SYN Flag Cnt",)), True),
+    FeatureGroup(6, "fwd_pkt_len", "Forward packet length", ("Fwd Pkt Len Mean", "Fwd Pkt Len Std"),
+                 ("Fwd Pkt Len Mean", "Fwd Pkt Len Std"), _as_float(("Fwd Pkt Len Mean", "Fwd Pkt Len Std")), True),
+    FeatureGroup(8, "reply", "Reply behaviour", ("Bwd Pkt Len Mean",), ("Bwd Pkt Len Mean",),
+                 _as_float(("Bwd Pkt Len Mean",)), False),
+    FeatureGroup(9, "conn_end_flags", "Connection-ending flags", ("RST Flag Cnt", "FIN Flag Cnt"),
+                 ("RST Flag Cnt", "FIN Flag Cnt"), _as_float(("RST Flag Cnt", "FIN Flag Cnt")), False),
+    FeatureGroup(10, "indicators", "No-reply and empty-payload indicators", ("no_reply", "empty_payload"),
+                 ("Tot Bwd Pkts", "Fwd Pkt Len Mean"), _indicators, False),
+    FeatureGroup(11, "timing_regularity", "Timing regularity", ("iat_cv",),
+                 ("Flow IAT Std", "Flow IAT Mean"), _iat_cv, False),
+)
+DROPPED_GROUP_7 = ("Flows to the same destination in a 10 s window: dropped because the 21 Feb file "
+                   "has no Dst IP column.")
+
+# Column order matters for a trained model. The original nine come first in the notebook's order
+# (groups 1, 2, 4, 5, 6, then the derived ratio of group 3), then groups 8-11.
+FEATURE_SETS = {"f9": (1, 2, 4, 5, 6, 3), "f15": (1, 2, 4, 5, 6, 3, 8, 9, 10, 11)}
+DEFAULT_FEATURE_SET = "f15"
+
+_BY_NUMBER = {g.number: g for g in REGISTRY}
+_BY_COLUMN = {c: g for g in REGISTRY for c in g.output_columns}
+
+
+def group(number: int) -> FeatureGroup:
+    return _BY_NUMBER[number]
+
+
+def group_of(column: str) -> FeatureGroup:
+    return _BY_COLUMN[column]
+
+
+def columns_for(feature_set: str) -> list[str]:
+    return [c for n in FEATURE_SETS[feature_set] for c in _BY_NUMBER[n].output_columns]
+
+
+FEATURES_F9 = columns_for("f9")      # the original nine columns (legacy models)
+FEATURES_F15 = columns_for("f15")
+ALL_COLUMNS = FEATURES_F15
+CORE_COLUMNS = [c for c in ALL_COLUMNS if group_of(c).core]
+CORE_RAW = list(dict.fromkeys(r for n in FEATURE_SETS["f9"] for r in _BY_NUMBER[n].required_raw))
+ALL_RAW = list(dict.fromkeys(r for g in REGISTRY for r in g.required_raw))
+EXTRA_RAW = [r for r in ALL_RAW if r not in CORE_RAW]     # Bwd Pkt Len Mean, RST/FIN Flag Cnt
+
+
+def groups_for(columns) -> list[FeatureGroup]:
+    """The groups a column list uses, in registry order."""
+    used = {group_of(c).number for c in columns}
+    return [g for g in REGISTRY if g.number in used]
+
+
+def feature_set_of(columns) -> str:
+    """'f9', 'f15' or 'custom' for a model's column list."""
+    for name in FEATURE_SETS:
+        if list(columns) == columns_for(name):
+            return name
+    return "custom"
+
+
+def summary(columns) -> str:
+    return f"{len(groups_for(columns))} feature groups ({len(columns)} columns)"
+
+
+def column_label(column: str) -> str:
+    """'empty_payload (F10)': the column with its Week 3 feature number."""
+    g = _BY_COLUMN.get(column)
+    return f"{column} (F{g.number})" if g else column
+
+
+def required_raw(columns) -> list[str]:
+    """CSV columns needed to build these model columns."""
+    return list(dict.fromkeys(r for g in groups_for(columns) for r in g.required_raw))
+
+
+# --- labels ----------------------------------------------------------------------------
 def tool_of(label) -> str:
     """Map an inconsistent raw label to a tool name (order matters, as in the notebook)."""
     s = str(label).lower()
@@ -70,42 +177,59 @@ def tools_from_labels(labels: pd.Series) -> pd.Series:
     return labels.astype(str).map({u: tool_of(u) for u in uniq})
 
 
+# --- cleaning and building -------------------------------------------------------------------
 def normalise_columns(columns) -> list[str]:
     """CICFlowMeter headers sometimes carry stray spaces."""
     return [str(c).strip() for c in columns]
 
 
-def missing_columns(columns) -> list[str]:
-    have = set(normalise_columns(columns))
-    return [c for c in REQUIRED_COLUMNS if c not in have]
+def missing_columns(header, columns=None) -> list[str]:
+    """Raw CSV columns needed for `columns` (default: the original nine) that the header lacks."""
+    have = set(normalise_columns(header))
+    return [c for c in required_raw(columns or FEATURES_F9) if c not in have]
 
 
 def clean_frame(df: pd.DataFrame) -> pd.DataFrame:
     """Strip header names, drop repeated header rows, coerce numerics, inf -> NaN.
 
-    Rows with NaN are NOT dropped here: training drops them, the app reports them as
-    "Not scored".
+    Rows with NaN are NOT dropped here: training drops them (core columns only), the app
+    reports them as "Not scored".
     """
     df = df.copy()
     df.columns = normalise_columns(df.columns)
     if LABEL in df.columns:
         df = df[df[LABEL].astype(str).str.strip() != LABEL]
-    for c in REQUIRED_COLUMNS:
-        if c in df.columns:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-    num = [c for c in REQUIRED_COLUMNS if c in df.columns]
+    num = [c for c in ALL_RAW if c in df.columns]
+    for c in num:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
     df[num] = df[num].replace([np.inf, -np.inf], np.nan)
     return df
 
 
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Return the 9 model inputs (float64) for an already-cleaned frame."""
-    X = df[BASE_FEATURES].astype("float64").copy()
-    X["fwd_bwd_ratio"] = df["Tot Fwd Pkts"].astype("float64") / (df["Tot Bwd Pkts"].astype("float64") + 1)
-    X = X.replace([np.inf, -np.inf], np.nan)
-    return X[FEATURES]
+def buildable_columns(df_columns) -> list[str]:
+    """Registry columns whose raw inputs are all present (in model order)."""
+    have = set(df_columns)
+    return [c for c in ALL_COLUMNS if all(r in have for r in group_of(c).required_raw)]
+
+
+def build_features(df: pd.DataFrame, columns=None) -> pd.DataFrame:
+    """Build exactly `columns` (default: the original nine), in that order, as float64."""
+    columns = list(columns or FEATURES_F9)
+    parts = [g.build(df) for g in groups_for(columns)]
+    X = pd.concat(parts, axis=1) if parts else pd.DataFrame(index=df.index)
+    return X[columns].replace([np.inf, -np.inf], np.nan)
 
 
 def valid_mask(X: pd.DataFrame) -> np.ndarray:
-    """True for rows whose model inputs are all finite (these can be scored)."""
-    return np.isfinite(X[FEATURES].to_numpy(dtype="float64")).all(axis=1)
+    """True for rows whose CORE inputs are all finite (these can be scored).
+    Missing values in features 8-11 are allowed: XGBoost handles them."""
+    core = [c for c in X.columns if c in _BY_COLUMN and group_of(c).core]
+    return np.isfinite(X[core].to_numpy(dtype="float64")).all(axis=1)
+
+
+def extra_missing_mask(X: pd.DataFrame) -> np.ndarray:
+    """True for rows with a missing value in any non-core column (features 8-11)."""
+    extra = [c for c in X.columns if c in _BY_COLUMN and not group_of(c).core]
+    if not extra:
+        return np.zeros(len(X), dtype=bool)
+    return X[extra].isna().to_numpy().any(axis=1)

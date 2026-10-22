@@ -10,8 +10,11 @@ explains them with SHAP, and supports an analyst review/feedback loop. It is a u
 evidence for the report, **not a production IDS**. Correctness and honesty about the model's limits
 matter more than polish.
 
-Specs, in order of precedence: `docs/HANDOFF_UPDATE_1.md` wins over `docs/HANDOFF_desktop_app.md`;
-`notebooks/ddos_xgboost_starter_v2.ipynb` is the source of truth for the data pipeline.
+Specs, in order of precedence: `docs/HANDOFF_UPDATE_2.md` (15 columns, feature registry) wins over
+`docs/HANDOFF_UPDATE_1.md`, which wins over `docs/HANDOFF_desktop_app.md`;
+`notebooks/ddos_xgboost_starter_v2.ipynb` is the source of truth for the data pipeline (if it and a
+handoff disagree, the notebook wins and the user is told). The group's Week 3 feature text is in
+`docs/Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx`.
 `docs/COMP6310_Project_Handoff.md` is the project-level summary from another chat (testing plan,
 papers, user preferences); it predates the app, so where it conflicts with the update (e.g. it says
 "confidence score") the update wins. The latest session summary is `docs/HANDOFF_SESSION_1.md`.
@@ -25,10 +28,10 @@ Python is the project venv `.venv` (Python 3.14; the only interpreter on this ma
 `.\.venv\Scripts\python.exe`, never a bare `python`.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 55 tests, ~5 s, synthetic data
+.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 71 tests, ~5 s, synthetic data
 .\.venv\Scripts\python.exe DDoSDetector\app\main.py [data\x.csv]   # run the app
-.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4]
-.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP [--benign-split attack_period]
+.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4] [--feature-set f9|f15]
+.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP [--benign-split by_file|attack_period]
 .\.venv\Scripts\python.exe DDoSDetector\scripts\make_sample.py --rows 50000      # test CSVs in data\
 powershell -ExecutionPolicy Bypass -File DDoSDetector\build_exe.ps1             # PyInstaller -> bin\Release
 ```
@@ -45,12 +48,13 @@ data/        CSVs (git-ignored, never commit)     docs/  handoffs     notebooks/
 DDoSDetector/                       the VS project (DDoSDetector.pyproj); working dir when run from VS
   app/paths.py                      all folder locations (data, models, logs, app/data) — use it, no cwd paths
   app/core/                         Qt-free logic, unit-tested:
-    features.py                     cleaning + the 9 model inputs; shared by training AND app
+    features.py                     THE feature registry (groups 1-6, 8-11; f9/f15 sets) + cleaning
     csv_reader.py, scoring.py, model_store.py, explain.py (TreeExplainer cache, pred_contribs),
     impact.py, review.py, feature_notes.py, timing.py
   app/plots/                        one file per chart plugin (auto-discovered); base.py = interface
   app/ui/                           main_window, results_table (virtual model), plot_panel, dialogs
-  app/data/                         feature_notes.json (DRAFT text), feature_evidence.csv (notebook 9b)
+  app/data/                         feature_notes.json (group's Week 3 text), feature_evidence.csv (notebook 9b)
+  models/                           *.json + *.meta.json (+ feature_set_comparison.csv from notebook 9c)
   app/workers.py                    QRunnable workers; callbacks use QueuedConnection
   train/train_model.py, scripts/make_sample.py, tests/, models/
 ```
@@ -59,19 +63,28 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 
 - **Never call the model output a "confidence" or a "probability"** (UI, exports, code, docs). It is the
   "model score" (0–1, uncalibrated because of `scale_pos_weight`). A test scans `app/` and README.
-- Say **"6 feature groups (9 columns)"**. Exactly 9 inputs, in `FEATURES` order. IP addresses and
-  timestamps are **never** model inputs (`Src IP`/`Dst IP`/`Dst Port` are kept only as alert tracing fields).
-- Rows with NaN/inf inputs are kept and shown as "Not scored", never silently dropped (training drops them).
-- The About / Model card must keep the honest results and the sentence that the model does not
-  generalise to unseen tools. No claims of detecting unseen tools, no blocking/mitigation, no real
-  SIEM/network integration (alert export is a file only).
+- **Feature columns are defined only in the registry** (`app/core/features.py`): never write a list
+  of model columns anywhere else (a test scans for it). Current model: **10 feature groups
+  (15 columns)**; the original nine are feature set `f9`. Use `summary(columns)` for wording. Each
+  model's `.meta.json` has `feature_columns`; the app builds exactly those (`model_columns(meta)`;
+  no field = the original nine). IP addresses and timestamps are **never** model inputs
+  (`Src IP`/`Dst IP`/`Dst Port` are kept only as alert tracing fields).
+- Rows with NaN/inf in the original nine columns (or the packet counts) are "Not scored", never
+  silently dropped; NaN in features 8–11 is allowed and counted. Training drops core-NaN rows only.
+- **Never claim features 8–11 help** (a test scans the app and README). Report 9c numbers, no
+  "best set".
+- Model card: numbers only from metadata. The recorded results (0.999 / 0.156 / 0.003, FPR 0.0084)
+  are nine-column results, shown only for nine-column models and labelled. "No transfer to unseen
+  tools" was observed with nine columns; don't state a conclusion for fifteen. No blocking/mitigation,
+  no real SIEM/network integration (alert export is a file only).
 - Training and inference must share `app/core/features.py`; don't duplicate cleaning logic.
 - New charts: one file in `app/plots/` with `@register`; never edit `main_window.py` for a chart.
   Heavy work in `prepare()` (worker thread), drawing in `render()` onto the given Figure — never
   `plt.figure()` / pyplot state. Shared colours/styles come from `app/plots/_style.py`.
 - Worker threads must not touch widgets or read window attributes; capture values before starting.
-- Do not edit the group's project documents. `feature_notes.json` is draft text flagged `"draft": true`;
-  ask the user for the Week 3 feature table instead of inventing more.
+- Do not edit the group's project documents. `feature_notes.json` holds the group's Week 3 text;
+  the only addition is `expected` (our reading of each assumption's direction), shown as such.
+  Don't invent feature text; ask the user. Verdicts are computed from `feature_evidence.csv`.
 - When running notebooks, execute a **copy** (nbclient, cwd = `notebooks/`); don't save outputs into
   the user's notebooks.
 - No git repo exists yet. Don't `git init`, commit or push unless asked.
@@ -92,3 +105,7 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   file in the scratchpad instead.
 - Docstrings containing Windows paths need `r"""` (invalid escape warnings).
 - Models matching `*_seed*` are git-ignored but needed locally by the Seed stability chart.
+- The 15-column results so far are the same as or very close to the nine-column ones (e.g. HOIC
+  held out 0.212); notebook 9c shows near-identical recall across feature sets. Report, don't interpret.
+- Windows Application Control (Smart App Control) blocked a freshly built `DDoSExplainer.exe` from
+  starting on 22 Oct 2026. Don't try to bypass it; tell the user.

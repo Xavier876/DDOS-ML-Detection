@@ -15,9 +15,12 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDoubleSpinBox, QFi
 from app.core import review as rv
 from app.core.csv_reader import MissingColumnsError, read_flows, read_header
 from app.core.explain import ExplainerCache, contributions, top_features
-from app.core.features import LABEL, TIME, TRACING_COLUMNS, missing_columns, tools_from_labels
-from app.core.model_store import ModelBundle, list_models, load_bundle
-from app.core.scoring import CODE_BENIGN, CODE_DDOS, CODE_NOT_SCORED, FLAG_NAMES, label_metrics, score
+from app.core.features import (LABEL, TIME, TRACING_COLUMNS, extra_missing_mask, missing_columns, summary,
+                               tools_from_labels)
+from app.core.model_store import ModelBundle, list_models, load_bundle, model_columns, read_meta, read_metas
+from app.core.scoring import (CODE_BENIGN, CODE_DDOS, CODE_NOT_SCORED, FLAG_NAMES, build_all, label_metrics,
+                              score)
+from app.plots.feature_set_comparison import FILE_KIND
 from app.core.timing import RunTimings, Stopwatch
 from app.paths import DATA_DIR
 from app.plots.base import ChartContext
@@ -28,7 +31,7 @@ from app.ui.results_table import ResultsData, ResultsTableModel
 from app.workers import Jobs
 
 log = logging.getLogger(__name__)
-DEFAULT_MODEL = "all_tools"
+DEFAULT_MODELS = ("all_tools_f15", "all_tools")   # first one found is loaded at start-up
 VERDICT_SHORTCUTS = {rv.CONFIRMED: "Ctrl+1", rv.FALSE_POSITIVE: "Ctrl+2", rv.UNSURE: "Ctrl+3",
                      rv.UNREVIEWED: "Ctrl+0"}
 
@@ -49,6 +52,7 @@ class MainWindow(QMainWindow):
         self.cache = ExplainerCache(on_timing=self.timings.record_shap)
         self._data_id = 0
         self._job = None
+        self._n_extra_missing = 0
 
         self.table_model = ResultsTableModel(self)
         self._build_ui()
@@ -195,10 +199,14 @@ class MainWindow(QMainWindow):
             a.setEnabled(False)
         act_model = QAction("Open model…", self)
         act_model.triggered.connect(self.open_model_dialog)
+        act_comparison = QAction("Open comparison results…", self)
+        act_comparison.setToolTip("feature_set_comparison.csv from notebook section 9c")
+        act_comparison.triggered.connect(self.open_comparison_dialog)
         act_exit = QAction("Exit", self, shortcut=QKeySequence.StandardKey.Quit)
         act_exit.triggered.connect(self.close)
         for group in ([self.act_open], [self.act_open_review, self.act_save_review],
-                      [self.act_export, self.act_alerts, self.act_feedback], [act_model], [act_exit]):
+                      [self.act_export, self.act_alerts, self.act_feedback], [act_model, act_comparison],
+                      [act_exit]):
             for a in group:
                 f.addAction(a)
             if a is not act_exit:
@@ -251,7 +259,8 @@ class MainWindow(QMainWindow):
 
     def _load_default_model(self):
         paths = list_models(self.models_dir)
-        pick = next((p for p in paths if p.name == f"{DEFAULT_MODEL}.meta.json"), paths[0] if paths else None)
+        by_name = {p.name.removesuffix(".meta.json"): p for p in paths}
+        pick = next((by_name[n] for n in DEFAULT_MODELS if n in by_name), paths[0] if paths else None)
         if pick:
             self.set_model(pick)
         else:
@@ -260,7 +269,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "No model", f"No trained models found in {self.models_dir}.\n"
                                     "Train one with: python train/train_model.py --mode all_tools")
 
-    def set_model(self, meta_path: Path):
+    def set_model(self, meta_path: Path, rescore: bool = True):
         if self._job is not None:
             QMessageBox.information(self, "Busy", "Wait for the current job to finish (or cancel it) "
                                     "before switching models.")
@@ -274,10 +283,11 @@ class MainWindow(QMainWindow):
             self._rebuild_model_menu()
             return
         self.bundle = bundle
-        self.model_label.setText(f"Model: {bundle.title} [{bundle.version}]")
+        self.model_label.setText(f"Model: {bundle.name}, {summary(bundle.features)} [{bundle.version}]")
+        self.model_label.setToolTip(bundle.title)
         self._rebuild_model_menu()
-        log.info("model %s (version %s) loaded", bundle.name, bundle.version)
-        if self.clean_df is not None:
+        log.info("model %s (version %s, %s) loaded", bundle.name, bundle.version, summary(bundle.features))
+        if rescore and self.clean_df is not None:
             self._start_scoring(self.clean_df, self.results.source if self.results else "")
 
     def open_model_dialog(self):
@@ -309,33 +319,43 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Could not read file", f"{path.name}:\n{e}")
             return
-        missing = missing_columns(header)
+        missing = missing_columns(header, self.bundle.features)
         if missing:
-            self._missing_dialog(path, missing)
+            alternative = self._missing_dialog(path, missing, header)
+            if alternative is not None:           # user chose a model that does not need them
+                self.set_model(alternative, rescore=False)
+                self.open_csv(path)
             return
 
         bundle = self.bundle   # the worker must not read window attributes
 
         def work(progress, cancelled):
             with Stopwatch() as load_sw:
-                df = read_flows(path, extra_columns=tuple(TRACING_COLUMNS),
+                df = read_flows(path, extra_columns=tuple(TRACING_COLUMNS), required_for=bundle.features,
                                 progress=lambda f: progress(0.9 * f), cancelled=cancelled)
             if cancelled():
                 return None
             with Stopwatch() as score_sw:
                 X, scores = score(bundle, df)
+            X_all = build_all(df)
             progress(1.0)
-            return df, X, scores, load_sw.seconds, score_sw.seconds
+            return df, X, scores, load_sw.seconds, score_sw.seconds, X_all
 
         self._run_job(work, f"Loading {path.name}", lambda out: self._loaded(out, path))
 
     def _start_scoring(self, df, source: str):
         bundle = self.bundle
+        if missing_columns(df.columns, bundle.features):
+            missing = missing_columns(df.columns, bundle.features)
+            QMessageBox.warning(self, "Model needs other columns",
+                                f"{bundle.name} needs column(s) the loaded file does not have:\n\n  • "
+                                + "\n  • ".join(missing) + "\n\nThe loaded results were not re-scored.")
+            return
 
         def work(progress, cancelled):
             with Stopwatch() as sw:
                 X, scores = score(bundle, df)
-            return df, X, scores, None, sw.seconds
+            return df, X, scores, None, sw.seconds, build_all(df)
 
         self._run_job(work, f"Scoring with {bundle.name}",
                       lambda out: self._loaded(out, self.source_path, keep_review=True))
@@ -373,16 +393,51 @@ class MainWindow(QMainWindow):
             return
         QMessageBox.critical(self, "Something went wrong", f"{e}\n\nDetails are in logs/app.log.")
 
-    def _missing_dialog(self, path, missing):
+    def _models_not_needing(self, header) -> list[Path]:
+        """Models in the models folder whose required raw columns the CSV header has."""
+        out = []
+        for name, meta in read_metas(self.models_dir):
+            if not missing_columns(header, model_columns(meta)):
+                out.append(self.models_dir / f"{name}.meta.json")
+        return out
+
+    def _missing_dialog(self, path, missing, header=None) -> Path | None:
+        """Explain which columns are missing. If another model can score the file, offer it
+        (never score with fewer features silently). Returns the chosen model's meta path."""
         name = path.name if path else "The file"
-        QMessageBox.critical(
-            self, "Missing columns",
-            f"{name} cannot be scored because these required column(s) are missing:\n\n  • "
-            + "\n  • ".join(missing)
-            + "\n\nThe app needs CICFlowMeter flow CSVs (as in CSE-CIC-IDS2018).")
+        model = self.bundle.name if self.bundle else "the active model"
+        text = (f"{name} cannot be scored with {model} because these required column(s) are missing:\n\n  • "
+                + "\n  • ".join(missing))
+        options = self._models_not_needing(header) if header is not None else []
+        preferred = next((p for p in options if p.name.startswith("all_tools.")), options[0] if options else None)
+        if preferred is None:
+            QMessageBox.critical(self, "Missing columns",
+                                 text + "\n\nNo trained model can score this file. The app needs CICFlowMeter "
+                                        "flow CSVs (as in CSE-CIC-IDS2018).")
+            return None
+        alt = preferred.name.removesuffix(".meta.json")
+        box = QMessageBox(QMessageBox.Icon.Warning, "Missing columns",
+                          text + f"\n\nThe model '{alt}' does not need these columns "
+                          f"({summary(model_columns(read_meta(preferred)))}). Score the file with it instead?",
+                          parent=self)
+        use = box.addButton(f"Use {alt}", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(QMessageBox.StandardButton.Cancel)
+        box.exec()
+        return preferred if box.clickedButton() is use else None
+
+    def open_comparison_dialog(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Open feature-set comparison results", str(self.models_dir),
+                                              "CSV files (*.csv)")
+        if path:
+            self.plots.set_file(FILE_KIND, Path(path))
+            for i, t in enumerate(self.plots.chart_tabs):
+                if t.plugin.name == "Feature-set comparison":
+                    self.plots.tabs.setCurrentIndex(i)
+            self.statusBar().showMessage(f"Comparison results: {Path(path).name}", 10000)
 
     def _loaded(self, out, path: Path, keep_review: bool = False):
-        df, X, scores, load_s, score_s = out
+        df, X, scores, load_s, score_s, X_all = out
+        self._n_extra_missing = int((extra_missing_mask(X) & ~np.isnan(scores)).sum())
         old = self.results
         self.clean_df, self.source_path = df, Path(path)
         source = self.source_path.name
@@ -413,7 +468,7 @@ class MainWindow(QMainWindow):
         ctx = ChartContext(model=self.bundle.model, model_title=self.bundle.title, X=X, scores=scores,
                            threshold=self.thr.value(), tools=tools, row_numbers=self.results.rows,
                            cache=self.cache, model_meta=self.bundle.meta, model_name=self.bundle.name,
-                           models_dir=self.models_dir)
+                           models_dir=self.models_dir, X_all=X_all)
         self.plots.set_context(ctx)
         for a in self.data_actions:
             a.setEnabled(True)
@@ -470,8 +525,10 @@ class MainWindow(QMainWindow):
         codes = self.table_model.codes
         n, n_ddos, n_ns = len(codes), int((codes == CODE_DDOS).sum()), int((codes == CODE_NOT_SCORED).sum())
         n_rev = int((r.review.verdicts != rv.UNREVIEWED).sum())
-        parts = [f"<b>{n:,}</b> flows", f"<b>{n_ddos:,}</b> flagged DDoS", f"<b>{n_ns:,}</b> not scored (invalid values)",
-                 f"<b>{n_rev:,}</b> reviewed", f"showing {self.table_model.rowCount():,}"]
+        parts = [f"<b>{n:,}</b> flows", f"<b>{n_ddos:,}</b> flagged DDoS", f"<b>{n_ns:,}</b> not scored (invalid values)"]
+        if self._n_extra_missing:   # allowed: XGBoost handles missing values in features 8-11
+            parts.append(f"<b>{self._n_extra_missing:,}</b> flows have missing values in features 8 to 11")
+        parts += [f"<b>{n_rev:,}</b> reviewed", f"showing {self.table_model.rowCount():,}"]
         text = " · ".join(parts)
         if r.tools is not None:
             m = label_metrics(r.scores, r.tools, self.thr.value())

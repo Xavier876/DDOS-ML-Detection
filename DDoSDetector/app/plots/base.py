@@ -28,21 +28,37 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from app.core.explain import ExplainerCache, ShapResult
+from app.core.explain import ExplainerCache, ShapResult, group_shap
+from app.core.features import column_label
 
 _REGISTRY: list[type["ChartPlugin"]] = []
 
 
 @dataclass
 class Option:
-    """A numeric input the chart panel shows above a chart (a spin box)."""
+    """An input the chart panel shows above a chart: a spin box, or a combo box when `choices`
+    is given (then the value is the index of the chosen item)."""
     label: str
-    default: float
-    minimum: float
-    maximum: float
+    default: float = 0
+    minimum: float = 0
+    maximum: float = 1
     decimals: int = 3
     step: float = 0.1
     suffix: str = ""
+    choices: tuple = ()
+
+
+BY_COLUMN, BY_GROUP = 0, 1
+VIEW_OPTION = Option("Show", default=BY_COLUMN, choices=("by column", "by feature group"))
+
+
+def shap_view(values: np.ndarray, data: pd.DataFrame, view: int):
+    """(values, labels, data-or-None) for a SHAP chart: per column labelled with feature numbers,
+    or per feature group (sum of the group's columns; no single feature value to colour by)."""
+    if int(view) == BY_GROUP:
+        gv, labels = group_shap(values, list(data.columns))
+        return gv, labels, None
+    return values, [column_label(c) for c in data.columns], data
 
 
 @dataclass
@@ -62,6 +78,8 @@ class ChartContext:
     model_name: str = ""
     models_dir: Optional[Path] = None   # where other trained models live (seed stability)
     options: dict = field(default_factory=dict)      # values of every plugin's Option inputs
+    X_all: Optional[pd.DataFrame] = None  # every registry column buildable from the CSV (for other models)
+    files: dict = field(default_factory=dict)        # extra result files opened by the user, by kind
 
     @property
     def has_label(self) -> bool:

@@ -4,7 +4,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .features import ATTACK_TOOLS, build_features, valid_mask
+from .features import ATTACK_TOOLS, build_features, buildable_columns, valid_mask
 from .model_store import ModelBundle, check_features
 
 BENIGN, DDOS, NOT_SCORED = "Benign", "DDoS", "Not scored"
@@ -13,17 +13,22 @@ FLAG_NAMES = np.array([BENIGN, DDOS, NOT_SCORED])
 CODE_BENIGN, CODE_DDOS, CODE_NOT_SCORED = 0, 1, 2
 
 
-def score(bundle: ModelBundle, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
-    """Score every row of a cleaned frame.
+def build_all(df: pd.DataFrame) -> pd.DataFrame:
+    """Every registry column the CSV's raw columns allow (used by charts that compare models)."""
+    return build_features(df, buildable_columns(df.columns))
 
-    Returns (X, scores): X holds the model inputs for every row (NaN where invalid) and
-    scores is P(DDoS), NaN for rows that could not be scored. No row is dropped.
+
+def score(bundle: ModelBundle, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarray]:
+    """Score every row of a cleaned frame with exactly the model's `feature_columns`.
+
+    Returns (X, scores): X holds the model inputs for every row and scores is the model score
+    (0..1), NaN for rows that could not be scored (NaN/inf in a core column). Missing values in
+    features 8-11 are allowed. No row is dropped.
     """
-    X = build_features(df)
-    missing = check_features(bundle.meta, X.columns)
+    missing = check_features(bundle.meta, buildable_columns(df.columns))
     if missing:
-        raise ValueError("Model expects features not produced from this CSV: " + ", ".join(missing))
-    X = X[bundle.features]
+        raise ValueError("Model expects features that cannot be built from this CSV: " + ", ".join(missing))
+    X = build_features(df, bundle.features)
     ok = valid_mask(X)
     scores = np.full(len(X), np.nan)
     if ok.any():

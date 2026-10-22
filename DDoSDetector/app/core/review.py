@@ -12,7 +12,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .features import FEATURES
 
 VERDICTS = ["unreviewed", "confirmed attack", "false positive", "unsure"]
 UNREVIEWED, CONFIRMED, FALSE_POSITIVE, UNSURE = range(4)
@@ -142,11 +141,11 @@ def write_alerts(base_path: Path, records: list[dict]) -> tuple[Path, Path]:
 
 
 def feedback_frame(review: Review, X: pd.DataFrame, rows: np.ndarray, source_file: str) -> pd.DataFrame:
-    """9 feature columns + label (confirmed attack -> 1, false positive -> 0) + source + row.
-    Unsure and unreviewed rows are excluded."""
+    """The model's feature columns (X's columns, in order) + label (confirmed attack -> 1,
+    false positive -> 0) + source + row. Unsure and unreviewed rows are excluded."""
     keep = np.isin(review.verdicts, list(FEEDBACK_LABEL))
     pos = np.flatnonzero(keep)
-    out = X.iloc[pos][FEATURES].reset_index(drop=True)
+    out = X.iloc[pos].reset_index(drop=True)
     out["label"] = [FEEDBACK_LABEL[int(v)] for v in review.verdicts[pos]]
     out["source_file"] = source_file
     out["row_number"] = rows[pos]

@@ -8,7 +8,7 @@ import numpy as np
 from app.core.features import TOOLS
 
 from . import _style as S
-from .base import ChartPlugin, register
+from .base import BY_GROUP, VIEW_OPTION, ChartPlugin, register, shap_view
 
 
 @register
@@ -17,6 +17,7 @@ class ShapByTool(ChartPlugin):
     needs_label = True
     scope = "global"
     order = 40
+    options = {"view": VIEW_OPTION}
 
     def _rows(self, ctx):
         """Positions for a sample of up to sample_size/4 scored flows per tool."""
@@ -38,8 +39,10 @@ class ShapByTool(ChartPlugin):
     def render(self, figure, ctx):
         S.style_figure(figure)
         groups = self.prepare(ctx)   # cached after the worker's first call
-        names = list(ctx.X.columns)
-        imp = np.array([np.abs(r.values).mean(axis=0) for _, r in groups])  # (tools, features)
+        view = self.option(ctx, "view")
+        views = [shap_view(r.values, r.data, view) for _, r in groups]
+        names = views[0][1]
+        imp = np.array([np.abs(v).mean(axis=0) for v, _, _ in views])  # (tools, features or groups)
         order = np.argsort(imp.max(axis=0))
         ax = figure.add_subplot()
         S.style_axes(ax, grid_axis="x")
@@ -50,10 +53,11 @@ class ShapByTool(ChartPlugin):
             ax.barh(y, imp[g, order], height=h * 0.85, color=S.TOOL_COLORS.get(t, S.SERIES),
                     label=f"{t} (n={len(r.rows):,})")
         ax.set_yticks(range(len(names)))
-        ax.set_yticklabels(np.array(names)[order], fontsize=8.5)
+        ax.set_yticklabels(np.array(names)[order], fontsize=8)
         ax.set_xlabel("mean |SHAP value| (log-odds)")
         ax.legend(loc="lower right", fontsize=8, frameon=False, labelcolor=S.THEME["ink2"])
+        per = "feature group" if int(view) == BY_GROUP else "column"
         S.title(figure, ax, "Do different tools rely on different features?",
-                "Mean |SHAP| per feature, grouped by the actual tool from the Label column "
+                f"Mean |SHAP| per {per}, grouped by the actual tool from the Label column "
                 "(sample stratified by tool).")
         S.finish(figure)

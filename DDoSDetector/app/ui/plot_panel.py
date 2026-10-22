@@ -11,7 +11,7 @@ from pathlib import Path
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import (QApplication, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
+from PySide6.QtWidgets import (QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QHBoxLayout, QLabel,
                                QMessageBox, QPushButton, QSpinBox, QTabWidget, QVBoxLayout, QWidget)
 
 from app.plots import _style as S
@@ -39,17 +39,23 @@ class ChartTab(QWidget):
         bar.addWidget(save)
         lay = QVBoxLayout(self)
         lay.setContentsMargins(4, 4, 4, 4)
-        self.option_boxes: dict[str, QDoubleSpinBox] = {}
-        if plugin.options:     # the chart's own inputs (e.g. assumed prevalence)
+        self.option_boxes: dict[str, QWidget] = {}
+        if plugin.options:     # the chart's own inputs (e.g. assumed prevalence, by column/group)
             row = QHBoxLayout()
             for key, opt in plugin.options.items():
-                sb = QDoubleSpinBox()
-                sb.setRange(opt.minimum, opt.maximum)
-                sb.setDecimals(opt.decimals)
-                sb.setSingleStep(opt.step)
-                sb.setValue(opt.default)
-                sb.setSuffix(opt.suffix)
-                sb.valueChanged.connect(lambda v, k=key: self.panel.option_changed(self, k, v))
+                if opt.choices:
+                    sb = QComboBox()
+                    sb.addItems(list(opt.choices))
+                    sb.setCurrentIndex(int(opt.default))
+                    sb.currentIndexChanged.connect(lambda v, k=key: self.panel.option_changed(self, k, v))
+                else:
+                    sb = QDoubleSpinBox()
+                    sb.setRange(opt.minimum, opt.maximum)
+                    sb.setDecimals(opt.decimals)
+                    sb.setSingleStep(opt.step)
+                    sb.setValue(opt.default)
+                    sb.setSuffix(opt.suffix)
+                    sb.valueChanged.connect(lambda v, k=key: self.panel.option_changed(self, k, v))
                 row.addWidget(QLabel(opt.label + ":"))
                 row.addWidget(sb)
                 self.option_boxes[key] = sb
@@ -104,6 +110,7 @@ class PlotPanel(QWidget):
         super().__init__(parent)
         self.jobs = Jobs()
         self.ctx: ChartContext | None = None
+        self.files: dict = {}          # extra result files opened by the user (e.g. comparison CSV)
         self.last_dir = str(Path.cwd())
         self.tabs = QTabWidget()
         self.chart_tabs: list[ChartTab] = []
@@ -141,7 +148,9 @@ class PlotPanel(QWidget):
             ctx.sample_size = self.sample.value()
             for t in self.chart_tabs:          # keep the user's option values across reloads
                 for key, sb in t.option_boxes.items():
-                    ctx.options[t.plugin.option_key(key)] = sb.value()
+                    ctx.options[t.plugin.option_key(key)] = (sb.currentIndex() if isinstance(sb, QComboBox)
+                                                             else sb.value())
+            ctx.files.update(self.files)
         for i, t in enumerate(self.chart_tabs):
             ok = ctx is None or not t.plugin.needs_label or ctx.has_label
             self.tabs.setTabEnabled(i, ok)
@@ -179,6 +188,14 @@ class PlotPanel(QWidget):
         self.ctx.threshold = t
         self.mark_dirty()          # titles / threshold lines change; SHAP stays cached
         self._redraw_timer.start()
+
+    def set_file(self, kind: str, path):
+        """Give charts a result file the user opened (File -> Open comparison results...)."""
+        self.files[kind] = path
+        if self.ctx is not None:
+            self.ctx.files[kind] = path
+            self.mark_dirty()
+            self.refresh_current()
 
     def option_changed(self, tab: ChartTab, key: str, value: float):
         if self.ctx is None:

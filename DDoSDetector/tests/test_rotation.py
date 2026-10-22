@@ -12,7 +12,7 @@ from xgboost import XGBClassifier
 
 from app.core import impact
 from app.core.explain import ExplainerCache
-from app.core.features import FEATURES, build_features, tools_from_labels
+from app.core.features import FEATURES_F9, build_features, tools_from_labels
 from app.core.model_store import held_out_results, load_bundle, save_bundle
 from app.core.scoring import score
 from app.plots.base import ChartContext, registry
@@ -40,7 +40,7 @@ def _frame():
     rows.append({"source_file": "B.csv", "Timestamp": pd.Timestamp("2018-02-21 15:00"), "tool": "LOIC-UDP"})
     df = pd.DataFrame(rows)
     df["y"] = (df["tool"] != "Benign").astype(int)
-    for c in FEATURES:
+    for c in FEATURES_F9:
         df[c] = 1.0
     return df
 
@@ -95,7 +95,7 @@ def models_dir(tmp_path_factory, flows):
     m = XGBClassifier(n_estimators=10, max_depth=3, random_state=0).fit(X, y)
     m2 = XGBClassifier(n_estimators=10, max_depth=2, subsample=0.6, random_state=1).fit(X, y)
     timing = {"train_seconds": 1.5, "train_rows": 100, "predict_seconds": 0.5, "predict_rows": 50}
-    base = {"features": FEATURES, "seed": 0, "timing": timing}
+    base = {"features": FEATURES_F9, "seed": 0, "timing": timing}
     save_bundle(d, "all_tools", m, {**base, "mode": "all_tools", "setup": "all_tools", "metrics": {
         "recall": {"HOIC": 0.999, "LOIC-HTTP": 0.989, "LOIC-UDP": 1.0},
         "n_test": {"HOIC": 200, "LOIC-HTTP": 170, "LOIC-UDP": 5}, "fpr": 0.01, "false_alarms": 3}})
@@ -123,7 +123,7 @@ def test_model_card_shows_timing_and_held_out_table(models_dir):
     from app.ui.about_dialog import model_card_html
     meta = load_bundle(models_dir / "hoic_held_out.meta.json").meta
     h = model_card_html(meta, models_dir=models_dir)
-    assert "1.5 s on 100 rows" in h and "Held-out results for every model" in h and "loic_http_held_out" in h
+    assert "1.5 s on 100 rows" in h and "Held-out results for every f9 model" in h and "loic_http_held_out" in h
 
 
 def _ctx(models_dir, with_label=True):

@@ -1,120 +1,125 @@
 {
-  "summary": "6 feature groups (9 columns)",
+  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note).",
   "hypothesis_note": "The assumptions below are hypotheses. Where the data did not support an assumption, this is stated.",
-  "source": "DRAFT placeholder text written for the app. Replace raw_data, calculation, assumption, legitimate_lookalike and evasion with the group's Week 3 feature table, and set \"draft\": false.",
-  "draft": true,
-  "dropped": "Flows to the same destination in a 10 s window: dropped because the 21 Feb file has no Dst IP column.",
+  "direction_note": "'Expected' is our reading of each assumption as a direction (higher / lower than benign, or just different), added only so the data can be compared with it. It is not in the Week 3 document; check it with the group. 'none' = the assumption states no direction for that column.",
+  "added_note": "Features 8 to 11 were added after the first experiments, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do.",
   "groups": [
     {
-      "group": "Rate",
-      "features": [
-        {
-          "column": "Flow Pkts/s",
-          "raw_data": "Packet timestamps and packet counts of each flow (CICFlowMeter).",
-          "calculation": "(Tot Fwd Pkts + Tot Bwd Pkts) / Flow Duration, in packets per second.",
-          "assumption": "A flood sends packets at a higher rate than normal flows.",
-          "expected_direction": "higher",
-          "legitimate_lookalike": "Video streaming, large downloads, backups, bursts after a popular page goes live.",
-          "evasion": "Spread the attack over many more bots or connections so each flow has a normal rate."
-        },
-        {
-          "column": "Flow Byts/s",
-          "raw_data": "Packet sizes and timestamps of each flow.",
-          "calculation": "(TotLen Fwd Pkts + TotLen Bwd Pkts) / Flow Duration, in bytes per second.",
-          "assumption": "A flood moves more bytes per second than a normal flow.",
-          "expected_direction": "higher",
-          "legitimate_lookalike": "File transfers, software updates, streaming.",
-          "evasion": "Use small packets or a lower per-flow rate across many sources."
-        }
-      ]
+      "number": 1,
+      "raw_data": "Packet count, byte count and timestamps of the first and last packet in the flow",
+      "calculation": "Packets (or bytes) divided by flow duration",
+      "behaviour": "How hard the source is pushing traffic. A flood aims to exhaust bandwidth or processing capacity, so its rate is high.",
+      "assumption": "Malicious flows in a flood send faster than normal user flows.",
+      "lookalike": "Yes. A large download, a video stream or a popular event can give similar rates.",
+      "evasion": "Yes. Slowing each source down lowers the rate, although this also lowers the damage per source.",
+      "notes": ["Data note: when the duration is zero the rate is undefined, and the dataset contains infinite and missing values here. This links to the cleaning step in Week 2."],
+      "expected": {"Flow Pkts/s": "higher", "Flow Byts/s": "higher"}
     },
     {
-      "group": "Duration",
-      "features": [
-        {
-          "column": "Flow Duration",
-          "raw_data": "Timestamps of the first and last packet of each flow.",
-          "calculation": "Time between the first and last packet of the flow, in microseconds.",
-          "assumption": "Attack tools open many short connections, so attack flows are shorter.",
-          "expected_direction": "lower",
-          "legitimate_lookalike": "Short DNS lookups, health checks, single small HTTP requests.",
-          "evasion": "Hold connections open longer (slow, long-lived requests) or reuse connections."
-        }
-      ]
+      "number": 2,
+      "raw_data": "Timestamps of the first and last packet",
+      "calculation": "Last packet time minus first packet time, in microseconds",
+      "behaviour": "Floods often produce very short flows (one request and no follow-up) or flows held open to tie up the server.",
+      "assumption": "Attack flows have a duration profile different from normal browsing.",
+      "lookalike": "Yes. Quick API calls are short, and file transfers or streams are long.",
+      "evasion": "Yes, by completing requests normally or closing connections at typical times.",
+      "notes": [],
+      "expected": {"Flow Duration": "different"}
     },
     {
-      "group": "Forward/backward ratio",
-      "features": [
-        {
-          "column": "fwd_bwd_ratio",
-          "raw_data": "Packet counts in each direction (Tot Fwd Pkts, Tot Bwd Pkts).",
-          "calculation": "Tot Fwd Pkts / (Tot Bwd Pkts + 1). The +1 avoids dividing by zero for one-way flows.",
-          "assumption": "Flood traffic is mostly one-way: the attacker sends much more than the victim answers.",
-          "expected_direction": "higher",
-          "legitimate_lookalike": "Uploads, one-way UDP streams, telemetry and logging traffic.",
-          "evasion": "Use requests that make the server reply (complete handshakes, request large responses)."
-        }
-      ]
+      "number": 3,
+      "raw_data": "Number of packets sent by the initiator and by the responder",
+      "calculation": "Tot Fwd Pkts divided by (Tot Bwd Pkts + 1). The +1 only avoids division by zero",
+      "behaviour": "A flood sends packets without waiting for replies, so the flow is one-sided, especially when the target is overloaded and stops answering.",
+      "assumption": "Benign flows are more balanced because both sides take part in the exchange.",
+      "lookalike": "Yes. Uploads, streaming and a server that is down for other reasons also give lopsided ratios.",
+      "evasion": "Partly. The attacker controls the traffic it sends, but not the replies, so the ratio can still change if the target struggles.",
+      "notes": [],
+      "expected": {"fwd_bwd_ratio": "higher"}
     },
     {
-      "group": "Inter-arrival time",
-      "features": [
-        {
-          "column": "Flow IAT Mean",
-          "raw_data": "Timestamps of every packet in the flow.",
-          "calculation": "Mean time between consecutive packets of the flow, in microseconds.",
-          "assumption": "Automated tools send packets back-to-back, so the mean gap is smaller.",
-          "expected_direction": "lower",
-          "legitimate_lookalike": "Bulk transfers and streaming also send packets back-to-back.",
-          "evasion": "Add delays between packets (low-and-slow attacks)."
-        },
-        {
-          "column": "Flow IAT Std",
-          "raw_data": "Timestamps of every packet in the flow.",
-          "calculation": "Standard deviation of the time between consecutive packets, in microseconds.",
-          "assumption": "Tool traffic is machine-regular, so the gaps vary less than in human-driven traffic.",
-          "expected_direction": "lower",
-          "legitimate_lookalike": "Periodic keep-alives, polling clients, monitoring agents.",
-          "evasion": "Add random jitter to the packet timing."
-        }
-      ]
+      "number": 4,
+      "raw_data": "Timestamp of every packet in the flow",
+      "calculation": "Mean and standard deviation of the gaps between consecutive packets (either direction)",
+      "behaviour": "Attack tools send automatically, so gaps between packets may be very small or very regular.",
+      "assumption": "Human and normal application traffic is burstier and less regular.",
+      "lookalike": "Yes. Polling clients, heartbeat messages and other automated software are regular too.",
+      "evasion": "Yes, easily, by adding random delays.",
+      "notes": [],
+      "expected": {"Flow IAT Mean": "lower", "Flow IAT Std": "lower"}
     },
     {
-      "group": "SYN flag count",
-      "features": [
-        {
-          "column": "SYN Flag Cnt",
-          "raw_data": "TCP flags of every packet in the flow.",
-          "calculation": "Number of packets in the flow with the SYN flag set.",
-          "assumption": "SYN-based floods set the SYN flag on many packets.",
-          "expected_direction": "higher",
-          "legitimate_lookalike": "Connection retries on a lossy network, legitimate port scanners.",
-          "evasion": "Use application-layer floods (HTTP) over fully opened connections, or UDP."
-        }
-      ]
+      "number": 5,
+      "raw_data": "TCP header flags of every packet",
+      "calculation": "Number of packets in the flow with the SYN flag set",
+      "behaviour": "Connection-opening floods send many SYN packets, so SYN counts are unusual relative to the rest of the flow.",
+      "assumption": "The HTTP-based attacks (LOIC-HTTP and HOIC) go through normal TCP connections, so the handshake flags carry some signal.",
+      "lookalike": "Yes. Busy servers see many connection openings from normal users.",
+      "evasion": "Yes, by completing connections properly or using a different protocol.",
+      "notes": ["Limitation: UDP has no TCP flags, so this feature says nothing about LOIC-UDP flows.",
+                "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison."],
+      "expected": {"SYN Flag Cnt": "higher"}
     },
     {
-      "group": "Forward packet length",
-      "features": [
-        {
-          "column": "Fwd Pkt Len Mean",
-          "raw_data": "Sizes of the packets sent from source to destination.",
-          "calculation": "Mean size of forward packets in the flow, in bytes.",
-          "assumption": "Flood packets are small (little or no payload).",
-          "expected_direction": "lower",
-          "legitimate_lookalike": "ACK-only traffic, small API calls, IoT messages.",
-          "evasion": "Pad packets with random payload."
-        },
-        {
-          "column": "Fwd Pkt Len Std",
-          "raw_data": "Sizes of the packets sent from source to destination.",
-          "calculation": "Standard deviation of forward packet sizes in the flow, in bytes.",
-          "assumption": "A tool sends identical packets, so the sizes hardly vary.",
-          "expected_direction": "lower",
-          "legitimate_lookalike": "Fixed-size telemetry or heartbeat messages.",
-          "evasion": "Randomise the packet sizes."
-        }
-      ]
+      "number": 6,
+      "raw_data": "Length of each packet sent by the initiator",
+      "calculation": "Mean and standard deviation of those lengths",
+      "behaviour": "Attack tools often send fixed or repeated payloads, giving low variation in packet size.",
+      "assumption": "Normal requests vary more in size.",
+      "lookalike": "Yes. Machine-to-machine traffic such as API calls and monitoring pings is also uniform.",
+      "evasion": "Yes, by padding or randomising payloads.",
+      "notes": [],
+      "expected": {"Fwd Pkt Len Mean": "none", "Fwd Pkt Len Std": "lower"}
+    },
+    {
+      "number": 8,
+      "raw_data": "Length of each packet sent by the responder",
+      "calculation": "Mean of those lengths (read from the CSV column Bwd Pkt Len Mean)",
+      "behaviour": "What the target sends back. A flood overwhelms the target, so its replies may be small, rare or missing.",
+      "assumption": "During an attack the target's replies are smaller or absent compared with normal exchanges.",
+      "lookalike": "Yes. Uploads, streaming, health checks and any server error also give small or empty replies.",
+      "evasion": "Not directly, because the attacker does not control the replies. The value reflects the target's state as much as the attacker's behaviour, so it may not carry over to other targets.",
+      "notes": [],
+      "expected": {"Bwd Pkt Len Mean": "lower"}
+    },
+    {
+      "number": 9,
+      "raw_data": "TCP header flags of every packet",
+      "calculation": "Number of packets in the flow with the RST flag set (RST Flag Cnt), and with the FIN flag set (FIN Flag Cnt)",
+      "behaviour": "How the connection is closed. Attack tools may abandon connections with a reset or never close them cleanly.",
+      "assumption": "Attack flows end differently from normal browsing.",
+      "lookalike": "Yes. Network faults, timeouts and impatient clients also produce resets, and short sessions often lack a clean close.",
+      "evasion": "Yes, by closing connections properly, which is cheap for HTTP floods.",
+      "notes": ["Limitation: UDP has no TCP flags, so these features say nothing about LOIC-UDP flows."],
+      "expected": {"RST Flag Cnt": "different", "FIN Flag Cnt": "different"}
+    },
+    {
+      "number": 10,
+      "raw_data": "Number of packets sent by the responder; length of the packets sent by the initiator",
+      "calculation": "no_reply = 1 when Tot Bwd Pkts is 0, else 0. empty_payload = 1 when Fwd Pkt Len Mean is 0, else 0",
+      "behaviour": "Whether the exchange happened in both directions, and whether the flow carried any data.",
+      "assumption": "Many flood flows are one-sided or carry no application data, while most normal flows do both.",
+      "lookalike": "Yes. Port scans, failed connections, keepalives and one-way UDP traffic such as logging are also one-sided or empty.",
+      "evasion": "Yes, by sending real requests that get replies, at the cost of more effort per packet.",
+      "notes": ["Note: these indicators restate information already in the packet counts and lengths, so they may add little accuracy. They are included because they make explanations clearer."],
+      "expected": {"no_reply": "higher", "empty_payload": "higher"}
+    },
+    {
+      "number": 11,
+      "raw_data": "Timestamp of every packet in the flow",
+      "calculation": "iat_cv = Flow IAT Std divided by (Flow IAT Mean + 1). The +1 only avoids division by zero",
+      "behaviour": "How regular the sending is, independent of how fast it is.",
+      "assumption": "Automated tools send at regular intervals, so the variation in gaps is small relative to the mean gap, while human traffic is burstier.",
+      "lookalike": "Yes. Polling clients, heartbeat messages and other automated software are regular too.",
+      "evasion": "Yes, easily, by adding random delays (the same weakness as feature 4).",
+      "notes": [],
+      "expected": {"iat_cv": "lower"}
     }
-  ]
+  ],
+  "dropped": {
+    "number": 7,
+    "title": "Flows to the same destination in a window",
+    "assumption": "The number of flows reaching a destination in a short window is much higher during an attack than in normal operation.",
+    "status": "Dropped. The 21 February file (HOIC and LOIC-UDP) has no destination IP column, so this feature cannot be built for those tools. The model therefore judges each flow alone, which keeps the Week 1 limitation that a single flow cannot show many sources hitting one target."
+  }
 }

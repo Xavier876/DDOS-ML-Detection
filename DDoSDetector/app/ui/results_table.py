@@ -13,6 +13,7 @@ import pandas as pd
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, Qt
 from PySide6.QtGui import QColor
 
+from app.core.features import column_label
 from app.core.review import CONFIRMED, FALSE_POSITIVE, UNSURE, VERDICTS, Review
 from app.core.scoring import CODE_DDOS, CODE_NOT_SCORED, FLAG_NAMES, flag_codes
 
@@ -217,7 +218,7 @@ class ResultsTableModel(QAbstractTableModel):
             if name == "Timestamp":
                 return str(d.timestamps[pos])
             v = self._Xv[pos, self._feature_col[name]]
-            return "NaN" if np.isnan(v) else f"{v:.6g}"
+            return "missing" if np.isnan(v) else f"{v:.6g}"
         if role == Qt.ItemDataRole.BackgroundRole:
             if name == FLAG:
                 return _FLAG_BG.get(int(self.codes[pos]))
@@ -237,7 +238,7 @@ class ResultsTableModel(QAbstractTableModel):
             return None
         name = self._columns[section]
         if role == Qt.ItemDataRole.DisplayRole:
-            return name
+            return column_label(name) if name in self._feature_col else name
         if role == Qt.ItemDataRole.ToolTipRole:
             return _TOOLTIPS.get(name, "Model input feature" if name in self._feature_col else None)
         return None

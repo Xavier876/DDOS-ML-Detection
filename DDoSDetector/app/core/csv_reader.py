@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 import pandas as pd
 
-from .features import (LABEL, OPTIONAL_COLUMNS, REQUIRED_COLUMNS, TRACING_COLUMNS, clean_frame,
+from .features import (ALL_RAW, LABEL, OPTIONAL_COLUMNS, TRACING_COLUMNS, clean_frame,
                        missing_columns, normalise_columns)
 
 ROW_COL = "row"
@@ -39,19 +39,21 @@ def read_flows(
     cancelled: Optional[Callable[[], bool]] = None,
     chunk_filter: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
     nrows: Optional[int] = None,
+    required_for=None,
 ) -> pd.DataFrame:
-    """Read the required + optional columns of a CICFlowMeter CSV in chunks.
+    """Read every feature-registry raw column present (+ Label/Timestamp + extra_columns) in chunks.
 
+    `required_for` is the list of model columns that must be buildable (default: the original
+    nine); MissingColumnsError names the raw CSV columns they need but the file lacks.
     Returns a cleaned frame (see features.clean_frame) with a `row` column.
-    Raises MissingColumnsError if a required column is absent.
     """
     path = Path(path)
     raw_header = read_header(path)
-    missing = missing_columns(raw_header)
+    missing = missing_columns(raw_header, required_for)
     if missing:
         raise MissingColumnsError(path, missing)
 
-    wanted = set(REQUIRED_COLUMNS) | set(OPTIONAL_COLUMNS) | set(extra_columns)
+    wanted = set(ALL_RAW) | set(OPTIONAL_COLUMNS) | set(extra_columns)
     usecols = [raw for raw, clean in zip(raw_header, normalise_columns(raw_header)) if clean in wanted]
     # Read as strings where repeated header rows might appear; clean_frame coerces numerics.
     # Tracing columns (IPs, port) are kept as text: they are never model inputs.

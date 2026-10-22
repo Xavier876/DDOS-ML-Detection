@@ -30,7 +30,7 @@ def test_fwd_bwd_ratio_and_order():
     df["Tot Fwd Pkts"] = [10, 3, 0, 7, 1]
     df["Tot Bwd Pkts"] = [4, 0, 0, 6, 1]          # zero backward packets -> divide by 1
     X = F.build_features(df)
-    assert list(X.columns) == F.FEATURES and len(F.FEATURES) == 9
+    assert list(X.columns) == F.FEATURES_F9 and len(F.FEATURES_F9) == 9
     np.testing.assert_allclose(X["fwd_bwd_ratio"], [2.0, 3.0, 0.0, 1.0, 0.5])
 
 
@@ -52,7 +52,7 @@ def test_clean_frame_headers_inf_nan():
 
 
 def test_missing_columns():
-    cols = [c for c in F.REQUIRED_COLUMNS if c != "Tot Bwd Pkts"] + [" Flow Pkts/s "]
+    cols = [c for c in F.ALL_RAW if c != "Tot Bwd Pkts"] + [" Flow Pkts/s "]
     assert F.missing_columns(cols) == ["Tot Bwd Pkts"]
 
 
@@ -120,13 +120,13 @@ def test_shap_additivity(bundle, flows):
 
 # --- model store --------------------------------------------------------------------
 def test_model_roundtrip(tmp_path, bundle, flows):
-    meta = {"features": F.FEATURES, "title": "roundtrip"}
+    meta = {"features": F.FEATURES_F9, "title": "roundtrip"}
     save_bundle(tmp_path, "m1", bundle.model, meta, background=F.build_features(flows).head(20))
     assert list_models(tmp_path) == [tmp_path / "m1.meta.json"]
     b = load_bundle(tmp_path / "m1.meta.json")
-    assert b.name == "m1" and b.features == F.FEATURES and len(b.background) == 20
+    assert b.name == "m1" and b.features == F.FEATURES_F9 and len(b.background) == 20
     X = F.build_features(flows)
     np.testing.assert_allclose(b.model.predict_proba(X), bundle.model.predict_proba(X), atol=1e-6)
     assert check_features(b.meta, X.columns) == []
-    assert check_features({"features": F.FEATURES + ["extra"]}, X.columns) == ["extra"]
+    assert check_features({"features": F.FEATURES_F9 + ["extra"]}, X.columns) == ["extra"]
     assert json.loads((tmp_path / "m1.meta.json").read_text())["model_file"] == "m1.json"

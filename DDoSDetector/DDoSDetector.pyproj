@@ -71,6 +71,8 @@
     <Compile Include="app\plots\held_out_comparison.py" />
     <Compile Include="app\plots\threshold_sweep.py" />
     <Compile Include="app\plots\flash_crowd.py" />
+    <Compile Include="app\plots\feature_set_comparison.py" />
+    <Compile Include="tests\test_update2.py" />
     <Compile Include="tests\test_rotation.py" />
     <Compile Include="app\ui\features_dialog.py" />
     <Compile Include="tests\test_update1.py" />

@@ -5,14 +5,15 @@ depend on the loaded CSV.
 """
 import numpy as np
 
-from app.core.features import ATTACK_TOOLS
-from app.core.model_store import held_out_results
+from app.core.features import ATTACK_TOOLS, feature_set_of, summary
+from app.core.model_store import held_out_results, model_columns
 
 from . import _style as S
 from .base import ChartPlugin, message, register
 
-GROUPS = [("seen", "Seen in training (all_tools)", "#2a78d6"),
+GROUPS = [("seen", "Seen in training (all tools)", "#2a78d6"),
           ("per_day", "Held out, per-day benign split", "#eb6834"),
+          ("by_file", "Held out, by-file benign split", "#eda100"),
           ("attack_period", "Held out, attack-period benign split", "#1baf7a")]
 
 
@@ -20,7 +21,7 @@ def comparison_table(rows: list[dict]) -> dict:
     """{group: {tool: (recall, n, fpr, false_alarms, name)}} from held_out_results()."""
     table = {g: {} for g, _, _ in GROUPS}
     for r in rows:
-        if r["held_out"] is None and r["name"] == "all_tools":
+        if r["held_out"] is None and r["split"] == "random":
             for t in ATTACK_TOOLS:
                 if t in r["recall"]:
                     table["seen"][t] = (r["recall"][t], r["n_test"].get(t), r["fpr"], r["false_alarms"], r["name"])
@@ -39,20 +40,24 @@ class HeldOutComparison(ChartPlugin):
 
     def render(self, figure, ctx):
         S.style_figure(figure)
-        table = comparison_table(held_out_results(ctx.models_dir)) if ctx.models_dir else {}
+        fset = feature_set_of(model_columns(ctx.model_meta))
+        table = comparison_table(held_out_results(ctx.models_dir, fset)) if ctx.models_dir else {}
         if not any(len(v) for k, v in table.items() if k != "seen"):
-            return message(figure, "No held-out models found in the models folder.\n\n"
-                                   "Train them with:\ntrain_model.py --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP")
+            return message(figure, f"No held-out models with the active model's feature set ({fset}) "
+                                   "in the models folder.\n\nTrain them with:\ntrain_model.py --mode held_out "
+                                   f"--held-out HOIC LOIC-HTTP LOIC-UDP --feature-set {fset}")
+        table = {k: v for k, v in table.items() if v or k == "seen"}
+        groups = [g for g in GROUPS if g[0] in table]
         gs = figure.add_gridspec(2, 1, height_ratios=[1.3, 1], left=0.09, right=0.98, top=0.8,
                                  bottom=0.08, hspace=0.45)
         x = np.arange(len(ATTACK_TOOLS))
-        w = 0.8 / len(GROUPS)
+        w = 0.8 / len(groups)
         for panel, (key, ylabel) in enumerate([(0, "recall on the tool (threshold 0.5)"),
                                                (2, "false positive rate on benign")]):
             ax = figure.add_subplot(gs[panel, 0])
             S.style_axes(ax, grid_axis="y")
             vmax = 0
-            for g, (group, label, color) in enumerate(GROUPS):
+            for g, (group, label, color) in enumerate(groups):
                 for i, tool in enumerate(ATTACK_TOOLS):
                     cell = table[group].get(tool)
                     if cell is None or cell[key] is None:
@@ -70,13 +75,16 @@ class HeldOutComparison(ChartPlugin):
                 handles, labels = ax.get_legend_handles_labels()
                 uniq = dict(zip(labels, handles))
                 ax.legend(uniq.values(), uniq.keys(), fontsize=8, frameon=False, loc="lower left",
-                          bbox_to_anchor=(0, 1.0), labelcolor=S.THEME["ink2"], ncol=3)
+                          bbox_to_anchor=(0, 1.0), labelcolor=S.THEME["ink2"], ncol=2)
             else:
                 ax.set_ylim(0, max(vmax * 1.3, 0.001))
                 ax.set_title("FPR of each model on its own benign test flows (lower is better; the "
-                             "all_tools bar is the same model in every group)",
+                             "all-tools bar is the same model in every group)",
                              loc="left", fontsize=8.5, color=S.THEME["ink2"])
-        S.title(figure, figure.axes[0], "Does the model detect a DDoS tool it never saw?",
-                "Each model's own test split. Seen in training = optimistic upper bound (random split). "
-                "Held-out LOIC-UDP is still caught, but only because its one-way ratio (~120,000) is far beyond "
-                "anything benign; that is one extreme feature on 1,730 flows, not evidence of general transfer.")
+        note = ("With the nine-column model, held-out LOIC-UDP was still caught almost entirely through "
+                "fwd_bwd_ratio (~120,000 vs under 2 for HOIC and benign): one extreme feature, not general transfer."
+                if fset == "f9" else
+                "LOIC-UDP has only about 1,730 flows, so its bars are a stress test, not a reliable number.")
+        S.title(figure, figure.axes[0], f"Does the model detect a DDoS tool it never saw? ({summary(model_columns(ctx.model_meta))})",
+                "Numbers from each model's own metadata (its own test split). Seen in training = optimistic upper "
+                "bound (random split); tool and capture day are confounded. " + note)

@@ -19,6 +19,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{6B1E0D47-9
 		docs\HANDOFF_UPDATE_1.md = docs\HANDOFF_UPDATE_1.md
 		docs\HANDOFF_SESSION_1.md = docs\HANDOFF_SESSION_1.md
 		docs\COMP6310_Project_Handoff.md = docs\COMP6310_Project_Handoff.md
+		docs\HANDOFF_UPDATE_2.md = docs\HANDOFF_UPDATE_2.md
+		docs\Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx = docs\Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "notebooks", "notebooks", "{C47D2E91-5A3B-4F0E-B6D8-91E2A7C3F054}"

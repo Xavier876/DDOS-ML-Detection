@@ -17,6 +17,8 @@ from typing import Optional
 import pandas as pd
 from xgboost import XGBClassifier
 
+from .features import FEATURES_F9, feature_set_of
+
 META_SUFFIX = ".meta.json"
 
 
@@ -32,7 +34,11 @@ class ModelBundle:
 
     @property
     def features(self) -> list[str]:
-        return list(self.meta["features"])
+        return model_columns(self.meta)
+
+    @property
+    def feature_set(self) -> str:
+        return feature_set_of(self.features)
 
     @property
     def title(self) -> str:
@@ -42,6 +48,12 @@ class ModelBundle:
     def setup(self) -> str:
         """Models with the same setup and different seeds are seed variants of each other."""
         return setup_of(self.meta, self.name)
+
+
+def model_columns(meta: dict) -> list[str]:
+    """The model's input columns, in order. Models trained before the feature registry stored
+    them as `features`; a model with neither is one of the original nine-column models."""
+    return list(meta.get("feature_columns") or meta.get("features") or FEATURES_F9)
 
 
 def setup_of(meta: dict, name: str = "") -> str:
@@ -87,8 +99,6 @@ def load_bundle(meta_path: Path) -> ModelBundle:
     global _next_id
     meta_path = Path(meta_path)
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    if "features" not in meta:
-        raise ValueError(f"{meta_path.name} has no 'features' list")
     name = meta_path.name[: -len(META_SUFFIX)] if meta_path.name.endswith(META_SUFFIX) else meta_path.stem
     model_file = meta_path.parent / meta.get("model_file", f"{name}.json")
     if not model_file.exists():
@@ -113,6 +123,10 @@ def list_models(models_dir: Path) -> list[Path]:
     return sorted(d.glob(f"*{META_SUFFIX}"))
 
 
+def read_meta(meta_path: Path) -> dict:
+    return json.loads(Path(meta_path).read_text(encoding="utf-8"))
+
+
 def read_metas(models_dir: Path) -> list[tuple[str, dict]]:
     """(name, metadata) for every model in models_dir; unreadable files are skipped."""
     out = []
@@ -124,17 +138,21 @@ def read_metas(models_dir: Path) -> list[tuple[str, dict]]:
     return out
 
 
-def held_out_results(models_dir: Path) -> list[dict]:
-    """One row per seed-0 model: held-out tool (None = all tools seen), split, and its own test
-    metrics. Used by the Held-out comparison chart and the model card."""
+def held_out_results(models_dir: Path, feature_set: str | None = None) -> list[dict]:
+    """One row per seed-0 model: held-out tool (None = all tools seen), split, feature set and its
+    own test metrics (optionally only models of one feature set). Used by the Held-out comparison
+    chart and the model card."""
     rows = []
     for name, meta in read_metas(models_dir):
         m = meta.get("metrics") or {}
         if not m or meta.get("seed", 0) != 0 or meta.get("extra_labelled"):
             continue
+        fset = feature_set_of(model_columns(meta))
+        if feature_set is not None and fset != feature_set:
+            continue
         tool = meta.get("held_out_tool")
         split = meta.get("benign_split_mode") or ("random" if not tool else "per_day")
-        rows.append({"name": name, "held_out": tool, "split": split,
+        rows.append({"name": name, "held_out": tool, "split": split, "feature_set": fset,
                      "recall": m.get("recall", {}), "n_test": m.get("n_test", {}),
                      "fpr": m.get("fpr"), "false_alarms": m.get("false_alarms"),
                      "pr_auc": m.get("pr_auc"), "base_rate": m.get("base_rate"),
@@ -145,4 +163,4 @@ def held_out_results(models_dir: Path) -> list[dict]:
 def check_features(meta: dict, columns) -> list[str]:
     """Model input features missing from a feature frame's columns (empty = OK)."""
     have = set(columns)
-    return [f for f in meta["features"] if f not in have]
+    return [f for f in model_columns(meta) if f not in have]

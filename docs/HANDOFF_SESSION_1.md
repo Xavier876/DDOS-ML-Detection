@@ -1,7 +1,8 @@
-# Handoff: session 1 (21 Oct 2026), desktop app build + handoff update 1
+# Handoff: session 1 (21–22 Oct 2026), desktop app build + handoff updates 1 and 2
 
-Read this with `HANDOFF_desktop_app.md` (original spec) and `HANDOFF_UPDATE_1.md` (wins where they
-disagree). `CLAUDE.md` in the solution folder has the commands and rules for working in this repo.
+Read this with `HANDOFF_desktop_app.md` (original spec), `HANDOFF_UPDATE_1.md` and
+`HANDOFF_UPDATE_2.md` (each later one wins where they disagree). `CLAUDE.md` in the solution folder
+has the commands and rules for working in this repo. Section 9 covers update 2 (15 columns).
 
 ## 1. What was asked in this session
 
@@ -10,6 +11,7 @@ disagree). `CLAUDE.md` in the solution folder has the commands and rules for wor
 3. Apply `HANDOFF_UPDATE_1.md` to the notebook and the app.
 4. Add `CLAUDE.md` and this handoff.
 5. Add the testing-plan features from `COMP6310_Project_Handoff.md` (section 8 below).
+6. Apply `HANDOFF_UPDATE_2.md`: 15 input columns, feature registry, updated notebook (section 9 below).
 
 ## 2. Current state
 
@@ -21,15 +23,16 @@ section 7 says otherwise.
 | Original acceptance criteria 1–9 | Pass (training, loading 1M rows, threshold/sort/filter, SHAP additivity test, charts, errors, exports, model card, pytest) |
 | Criterion 10 (README, packaging) | Pass. PyInstaller one-folder build works (`DDoSDetector\bin\Release\DDoSExplainer`, ~430 MB) |
 | Update criteria 11–17 | Pass (wording scan test, impact hand-calculation test, review reload, alert CSV/JSONL, feedback rules, Features panel with/without evidence, timing test) |
-| Tests | 55 pass (`.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests`) |
+| Update-2 criteria 18–22 | Pass (registry scan test, missing-column dialog + nine-column model scores, Features panel 10 groups, f15 model card from metadata only, no "8–11 help" claims) |
+| Tests | 71 pass (`.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests`) |
 | Visual Studio | `DDOS-ML-Detection.sln` builds with VS 2026 MSBuild, 0 warnings / 0 errors; F5 runs `app\main.py` with `.venv` |
 | Git | No repository yet; nothing committed |
 
-### Trained models (`DDoSDetector\models\`)
+### Trained nine-column models (`DDoSDetector\models\`; 15-column models are in section 9)
 
 | Model | Recall HOIC / LOIC-HTTP / LOIC-UDP | FPR (false alarms) |
 |---|---|---|
-| `all_tools` (seed 0, default) | 0.999 / 0.989 / 1.000 | 0.0104 (3,133) |
+| `all_tools` (seed 0) | 0.999 / 0.989 / 1.000 | 0.0104 (3,133) |
 | `all_tools_seed1`–`4` | 0.999 / 0.987–0.990 / 1.000 | 0.0091–0.0108 |
 | `hoic_held_out` | HOIC 0.212 (≤ 0.398 at any threshold tried) | 0.0077 (17,493) |
 | `hoic_held_out_attack_period` | HOIC 0.153 | 0.0000 (0) |
@@ -107,8 +110,8 @@ About / Model card (honest results, calibration note, SOC workflow, measured tim
 
 ## 5. Open items / suggested next steps
 
-1. **Replace the draft feature notes** with the group's Week 3 feature table (`app/data/feature_notes.json`,
-   then set `"draft": false`). Needed for the feature-engineering marks.
+1. **Check the expected direction per column** in `app/data/feature_notes.json` (`expected`), the only
+   thing added to the group's Week 3 text (done in update 2, section 9). The verdicts depend on it.
 2. **Hand-check the GUI** (section 7).
 3. Decide on version control: `git init`, then commit code + the two main models; `data/`, seed models,
    logs, `bin/`, `obj/` are already git-ignored.
@@ -173,3 +176,57 @@ plan, working preferences). It predates the app. New relative to the app was its
 - It marks the tool-to-file mapping as unverified. It is now confirmed: LOIC-HTTP is on 20 Feb; HOIC and LOIC-UDP are on 21 Feb.
 - It says the group has not confirmed HOIC as the main held-out tool. The app now shows all three, so nothing depends on that choice.
 
+## 9. Handoff update 2: 15 input columns (22 Oct 2026)
+
+`HANDOFF_UPDATE_2.md` added features 8-11 (`Bwd Pkt Len Mean`, `RST Flag Cnt`, `FIN Flag Cnt`,
+`no_reply`, `empty_payload`, `iat_cv`) and asked for a feature registry. The group's updated notebook
+and Weeks 1-4 document came with it (both copied unchanged into `docs\` / `notebooks\`).
+
+**Notebook.** The group's new `ddos_xgboost_starter_v2.ipynb` replaced mine. Only these were changed in
+it: `DATA_DIR = Path("../data")`, "model score" wording in cell 0, and the output paths of 9b
+(`..\DDoSDetector\app\data\feature_evidence.csv`) and 9c (`..\DDoSDetector\models\feature_set_comparison.csv`).
+A copy was run end to end (about 7 minutes); every section ran, including SHAP section 11, which had
+never been run. Previous notebook backed up in the session scratchpad (`v2_before_update2.ipynb`).
+
+**What was built.**
+- `app/core/features.py` is now the single feature registry (groups 1-6, 8-11; sets `f9`, `f15`).
+  Training, scoring, SHAP, the Features panel and tests read it; a test fails if any other module
+  lists model columns.
+- Model metadata: `feature_columns`, `feature_groups`, `feature_set`. Models without them = nine columns.
+- `train_model.py --feature-set f9|f15` (default f15, outputs `*_f15`) and `--benign-split by_file`.
+- The app builds exactly the active model's columns. Missing raw columns: a dialog names them and
+  offers a model that does not need them (checked headless: a CSV without `Bwd Pkt Len Mean`
+  switches to `all_tools` and scores). Missing values in features 8-11 are allowed and counted.
+- SHAP: feature numbers on every label (`empty_payload (F10)`), "by column / by feature group" choice
+  on the bar, beeswarm and SHAP-by-tool charts (group = sum of its columns' SHAP values; additivity
+  tested), consistent colours for 0/1 columns.
+- Features panel built from the group's Week 3 text, 10 groups + 7 as dropped; evidence from 9b;
+  plain-words verdicts. The only addition is `expected` per column (our reading, shown as such).
+- Model card: numbers only from metadata; the recorded nine-column results only for nine-column models.
+- New **Feature-set comparison** tab (reads 9c; recall with seed min-max error bars, false alarms,
+  PR-AUC; the requested caption; no "best" wording) and File -> Open comparison results.
+- Held-out comparison, model/seed stability and the model card filter by the active model's feature set.
+- Default model: `all_tools_f15`.
+
+**15-column results (each model's own test split, threshold 0.5), reported without interpretation:**
+
+| Model | Recall | FPR (false alarms) |
+|---|---|---|
+| `all_tools_f15` seeds 0-4 | HOIC 0.999, LOIC-HTTP 0.987-0.988, LOIC-UDP 0.998-1.000 | 0.0091-0.0097 |
+| `hoic_held_out_f15` / `_by_file_f15` / `_attack_period_f15` | HOIC 0.212 / 0.149 / 0.153 | 0.0077 / 0.0000 (7) / 0.0000 (0) |
+| `loic_http_held_out_f15` / `_attack_period_f15` | LOIC-HTTP 0.003 / 0.003 | 0.0055 / 0.0062 |
+| `loic_udp_held_out_f15` / `_attack_period_f15` | LOIC-UDP 1.000 / 0.994 (1,730 flows) | 0.0091 / 0.0042 |
+
+Notebook 9c (2 seeds, 300k benign, 200 trees): recall on the held-out tool is the same, or differs
+only in the third decimal, for the base nine columns, each new group alone, and all fifteen (HOIC
+per-day 0.209-0.210, HOIC by-file 0.163, LOIC-HTTP 0.003). Notebook section 7 with 15 columns:
+HOIC 0.212 (per day) / 0.149 (by file), LOIC-HTTP 0.003; baseline FPR 0.0091.
+
+**Differences flagged (notebook wins):**
+- The new notebook reverted my earlier fixes (data path, wording, output paths); re-applied as above.
+- Week 4 section 5 of the Word document still says "confidence score" (group document, not edited).
+- The notebook's "Findings" cell still quotes the older nine-column numbers (8,872,017 rows, FPR 0.0084).
+
+**Not tested:** the real window by hand (combo boxes, the switch-model dialog, the Features panel
+scrolling); the rebuilt packaged exe could not be started here because Windows Application Control
+blocked the new unsigned exe (not bypassed).

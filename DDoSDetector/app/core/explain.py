@@ -16,6 +16,7 @@ import pandas as pd
 import shap
 import xgboost as xgb
 
+from .features import column_label, groups_for
 from .timing import Stopwatch
 
 
@@ -34,13 +35,23 @@ def contributions(model, X: pd.DataFrame) -> np.ndarray:
 
 
 def top_features(values: np.ndarray, names: list[str], k: int = 3) -> list[list[str]]:
-    """For each row, the k largest |SHAP| features as 'name: pushes toward DDoS/Benign'."""
+    """For each row, the k largest |SHAP| columns as 'Flow Duration (F2): pushes toward DDoS'."""
     order = np.argsort(-np.abs(values), axis=1)[:, :k]
-    names = np.asarray(names)
+    labels = np.asarray([column_label(n) for n in names])
     out = []
     for r, idx in enumerate(order):
-        out.append([f"{names[j]}: pushes toward {'DDoS' if values[r, j] > 0 else 'Benign'}" for j in idx])
+        out.append([f"{labels[j]}: pushes toward {'DDoS' if values[r, j] > 0 else 'Benign'}" for j in idx])
     return out
+
+
+def group_shap(values: np.ndarray, columns: list[str]) -> tuple[np.ndarray, list[str]]:
+    """Per-row SHAP value of each feature GROUP = sum of its columns' SHAP values (SHAP is
+    additive, so the row total is unchanged). Returns (values, group labels like 'F10 ...')."""
+    groups = groups_for(columns)
+    idx = {c: i for i, c in enumerate(columns)}
+    out = np.column_stack([values[:, [idx[c] for c in g.output_columns if c in idx]].sum(axis=1)
+                           for g in groups]) if groups else np.zeros((len(values), 0))
+    return out, [g.label for g in groups]
 
 
 @dataclass

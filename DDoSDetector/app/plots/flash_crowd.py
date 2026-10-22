@@ -7,11 +7,12 @@ Flow Pkts/s or Flow Byts/s are used as a proxy.
 import numpy as np
 
 from app.core import impact
+from app.core.features import group
 
 from . import _style as S
 from .base import ChartPlugin, Option, message, register
 
-RATE_FEATURES = ["Flow Pkts/s", "Flow Byts/s"]
+RATE_FEATURES = list(group(1).output_columns)     # feature group 1: packet and byte rate
 
 
 @register

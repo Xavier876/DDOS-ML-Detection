@@ -19,7 +19,7 @@ from app.core import impact
 from app.core import review as rv
 from app.core.explain import ExplainerCache, contributions, top_features
 from app.core.feature_notes import assess, load_evidence, load_notes
-from app.core.features import FEATURE_GROUPS, FEATURES, build_features, tools_from_labels
+from app.core.features import FEATURES_F9, REGISTRY, build_features, column_label, tools_from_labels
 from app.core.model_store import load_bundle, save_bundle
 from app.core.scoring import FLAG_NAMES, flag_codes, score
 from app.core.timing import RunTimings, Stopwatch
@@ -29,9 +29,10 @@ from conftest import make_flows
 
 
 # --- wording -------------------------------------------------------------------------
-def test_feature_groups_are_6_groups_of_9_columns():
-    assert len(FEATURE_GROUPS) == 6
-    assert sorted(c for cols in FEATURE_GROUPS.values() for c in cols) == sorted(FEATURES)
+def test_original_nine_columns_are_6_groups():
+    from app.core.features import groups_for, summary
+    assert [g.number for g in groups_for(FEATURES_F9)] == [1, 2, 3, 4, 5, 6]
+    assert summary(FEATURES_F9) == "6 feature groups (9 columns)"
 
 
 def test_no_confidence_or_probability_wording_in_app():
@@ -141,10 +142,10 @@ def test_alert_export_csv_and_jsonl(bundle, tmp_path):
     allowed = set(rv.ALERT_FIELDS)
     for rec in parsed:
         assert set(rec) <= allowed
-        assert not set(rec) & set(FEATURES)                # no model-input columns
+        assert not set(rec) & set(FEATURES_F9)                # no model-input columns
         assert "dst_ip" not in rec                         # absent in input -> absent in alert
         assert rec["flag"] == "DDoS" and rec["model_score"] >= 0.5
-        assert re.fullmatch(r".+: pushes toward (DDoS|Benign)", rec["top_feature_1"])
+        assert re.fullmatch(r".+ \(F\d+\): pushes toward (DDoS|Benign)", rec["top_feature_1"])
     csv = pd.read_csv(csv_path)
     assert len(csv) == len(pos) and list(csv.columns) == list(parsed[0].keys())
 
@@ -154,7 +155,7 @@ def test_top_features_follow_shap(bundle, flows):
     vals = contributions(bundle.model, X.head(5))
     t = top_features(vals, list(X.columns))
     j = int(np.argmax(np.abs(vals[0])))
-    assert t[0][0] == f"{X.columns[j]}: pushes toward {'DDoS' if vals[0, j] > 0 else 'Benign'}"
+    assert t[0][0] == f"{column_label(X.columns[j])}: pushes toward {'DDoS' if vals[0, j] > 0 else 'Benign'}"
 
 
 def test_xgboost_contributions_equal_shap(bundle, flows):
@@ -173,7 +174,7 @@ def test_feedback_export_excludes_unsure_and_unreviewed(bundle):
     r.set(3, rv.UNSURE)
     r.set(4, note="only a note")
     out = rv.feedback_frame(r, X, df["row"].to_numpy(), "flows.csv")
-    assert list(out.columns) == FEATURES + ["label", "source_file", "row_number"]
+    assert list(out.columns) == FEATURES_F9 + ["label", "source_file", "row_number"]
     assert out["label"].tolist() == [1, 0] and out["row_number"].tolist() == [12, 13]
 
 
@@ -186,19 +187,20 @@ def test_extra_labelled_feedback_is_used_in_training(tmp_path, bundle):
     p = tmp_path / "fb.csv"
     rv.feedback_frame(r, X, df["row"].to_numpy(), "flows.csv").to_csv(p, index=False)
     extra = load_extra_labelled([p])
-    assert extra["y"].tolist() == [1, 0] and set(FEATURES) <= set(extra.columns)
+    assert extra["y"].tolist() == [1, 0] and set(FEATURES_F9) <= set(extra.columns)
 
 
 # --- C: features panel (acceptance 16) -------------------------------------------------
-def test_feature_notes_cover_all_columns():
-    notes = load_notes(FEATURE_NOTES)
-    cols = [f["column"] for g in notes["groups"] for f in g["features"]]
-    assert sorted(cols) == sorted(FEATURES) and len(notes["groups"]) == 6
-    for g in notes["groups"]:
-        for f in g["features"]:
-            assert f["expected_direction"] in ("higher", "lower")
-            for k in ("raw_data", "calculation", "assumption", "legitimate_lookalike", "evasion"):
-                assert f[k]
+def test_feature_notes_cover_every_registry_group():
+    notes = load_notes(FEATURE_NOTES)          # raises if groups don't match the registry
+    by_num = {g["number"]: g for g in notes["groups"]}
+    for g in REGISTRY:
+        n = by_num[g.number]
+        assert set(n["expected"]) == set(g.output_columns)
+        assert set(n["expected"].values()) <= {"higher", "lower", "different", "none"}
+        for k in ("raw_data", "calculation", "behaviour", "assumption", "lookalike", "evasion"):
+            assert n[k]
+    assert "draft" not in notes and notes["dropped"]["number"] == 7
 
 
 def test_features_panel_with_and_without_evidence(tmp_path, qapp):
@@ -213,7 +215,7 @@ def test_features_panel_with_and_without_evidence(tmp_path, qapp):
     p = tmp_path / "feature_evidence.csv"
     ev.to_csv(p, index=False)
     with_ev = features_html(notes, load_evidence(p))
-    assert "not supported" in with_ev and "AUC 0.50" in with_ev
+    assert "not supported so far" in with_ev and "AUC 0.50" in with_ev
     FeaturesDialog(None, evidence_path=tmp_path / "missing.csv")   # renders without the file
     FeaturesDialog(None, evidence_path=p)
 
@@ -221,9 +223,12 @@ def test_features_panel_with_and_without_evidence(tmp_path, qapp):
 def test_assess_rules():
     assert assess("higher", "higher", 0.8)[0] == "supported"
     assert assess("lower", "lower", 0.2)[0] == "supported"
-    assert assess("higher", "lower", 0.2)[0] == "contradicted"
-    assert assess("higher", "same", 0.52)[0] == "not supported"
+    assert assess("higher", "lower", 0.2)[0] == "opposite of the assumption"
+    assert assess("higher", "same", 0.52)[0] == "not supported so far"
     assert assess("higher", "lower", 0.65)[0] == "unclear"
+    assert assess("different", "lower", 0.3)[0] == "supported"
+    assert assess("different", "higher", 0.55)[0] == "not supported so far"
+    assert assess("none", "higher", 0.9)[0] == "no direction stated"
 
 
 # --- D: timing (acceptance 17) ------------------------------------------------------------
@@ -251,8 +256,8 @@ def test_seed_stability_chart(tmp_path, flows):
     for seed in (0, 1, 2):
         m = XGBClassifier(n_estimators=15, max_depth=3, subsample=0.7, random_state=seed).fit(X, y)
         name = "toy" if seed == 0 else f"toy_seed{seed}"
-        save_bundle(tmp_path, name, m, {"features": FEATURES, "mode": "toy", "setup": "toy", "seed": seed})
-    save_bundle(tmp_path, "other", m, {"features": FEATURES, "setup": "other", "seed": 0})
+        save_bundle(tmp_path, name, m, {"features": FEATURES_F9, "mode": "toy", "setup": "toy", "seed": seed})
+    save_bundle(tmp_path, "other", m, {"features": FEATURES_F9, "setup": "other", "seed": 0})
     b = load_bundle(tmp_path / "toy.meta.json")
     assert b.setup == "toy" and len(b.version) == 10
 
@@ -260,7 +265,7 @@ def test_seed_stability_chart(tmp_path, flows):
     assert [s for s, _, _ in seed_variants(tmp_path, "toy")] == [0, 1, 2]
     ctx = _ctx(b, models_dir=tmp_path)
     table = mean_abs_shap_by_seed(ctx)
-    assert list(table.columns) == ["seed 0", "seed 1", "seed 2"] and list(table.index) == FEATURES
+    assert list(table.columns) == ["seed 0", "seed 1", "seed 2"] and list(table.index) == [column_label(c) for c in FEATURES_F9]
     fig = Figure()
     plugin = SeedStability()
     plugin.prepare(ctx)
