@@ -6,9 +6,11 @@ notebooks/ddos_xgboost_starter_v2.ipynb (sections 5 and 6).
 
 Feature groups are numbered as in Week 3 of the project document (1-6 and 8-15; group 7,
 flows to the same destination in a window, was dropped because the 21 Feb file has no Dst IP).
-Update 3 added groups 12-15 and dropped group 5 (SYN) from the default set f21 (13 groups, 21
-columns). Each model's .meta.json lists the exact `feature_columns` it was trained on, so 9-, 15-
-and 21-column models all load and score.
+Update 3 added groups 12-15 and dropped group 5 (SYN) from the set f21 (13 groups, 21 columns).
+Update 4 (31 Oct 2026): the group settled on the original six feature groups, so the default is f9
+(groups 1-6, nine columns) again; groups 8-15 stay in the registry for the notebook comparison.
+Each model's .meta.json lists the exact `feature_columns` it was trained on, so 9-, 15- and
+21-column models all load and score.
 """
 from __future__ import annotations
 
@@ -120,10 +122,11 @@ DROPPED_GROUP_7 = ("Flows to the same destination in a 10 s window: dropped beca
 
 # Column order matters for a trained model. The original nine come first in the notebook's order
 # (groups 1, 2, 4, 5, 6, then the derived ratio of group 3), then groups 8-11, then 12-15.
-# f14 = f15 without SYN Flag Cnt (group 5); f21 = f14 + groups 12-15 (update 3, the default).
+# f14 = f15 without SYN Flag Cnt (group 5); f21 = f14 + groups 12-15 (update 3).
+# f9 = groups 1-6, the default since update 4.
 FEATURE_SETS = {"f9": (1, 2, 4, 5, 6, 3), "f15": (1, 2, 4, 5, 6, 3, 8, 9, 10, 11),
                 "f14": (1, 2, 4, 6, 3, 8, 9, 10, 11), "f21": (1, 2, 4, 6, 3, 8, 9, 10, 11, 12, 13, 14, 15)}
-DEFAULT_FEATURE_SET = "f21"
+DEFAULT_FEATURE_SET = "f9"
 
 _BY_NUMBER = {g.number: g for g in REGISTRY}
 _BY_COLUMN = {c: g for g in REGISTRY for c in g.output_columns}
@@ -141,9 +144,9 @@ def columns_for(feature_set: str) -> list[str]:
     return [c for n in FEATURE_SETS[feature_set] for c in _BY_NUMBER[n].output_columns]
 
 
-FEATURES_F9 = columns_for("f9")      # the original nine columns (legacy models)
+FEATURES_F9 = columns_for("f9")      # the original nine columns, the default (update 4)
 FEATURES_F15 = columns_for("f15")
-FEATURES_F21 = columns_for("f21")    # the default (update 3)
+FEATURES_F21 = columns_for("f21")    # update 3
 ALL_COLUMNS = list(dict.fromkeys(FEATURES_F15 + FEATURES_F21))   # every registry column
 CORE_COLUMNS = [c for c in ALL_COLUMNS if group_of(c).core]
 CORE_RAW = list(dict.fromkeys(r for n in FEATURE_SETS["f9"] for r in _BY_NUMBER[n].required_raw))

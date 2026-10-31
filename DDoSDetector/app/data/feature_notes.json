@@ -2,7 +2,7 @@
   "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note). Features 12-15: Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx' (22 Oct 2026), text drafted in the project chat.",
   "hypothesis_note": "The assumptions below are hypotheses. Where the data did not support an assumption, this is stated.",
   "direction_note": "'Expected' is our reading of each assumption as a direction (higher / lower than benign, or just different), added only so the data can be compared with it. It is not in the Week 3 document; check it with the group. 'none' = the assumption states no direction for that column.",
-  "added_note": "Features 8 to 11 were added after the first experiments and features 12 to 15 in update 3, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do.",
+  "added_note": "Features 8 to 11 were added after the first experiments and features 12 to 15 in update 3, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do. Since update 4 (31 Oct 2026) the default model uses only features 1 to 6, so 8 to 15 are not model inputs.",
   "groups": [
     {
       "number": 1,
@@ -58,7 +58,8 @@
       "evasion": "Yes, by completing connections properly or using a different protocol.",
       "notes": ["Limitation: UDP has no TCP flags, so this feature says nothing about LOIC-UDP flows.",
                 "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison.",
-                "Update 3 (22 Oct 2026): dropped from the default feature set f21 (and from f14). In this dataset the column holds only 0 or 1, and no attack flow has a SYN flag. Nine- and fifteen-column models still use it."],
+                "Update 3 (22 Oct 2026): dropped from the default feature set f21 (and from f14). In this dataset the column holds only 0 or 1, and no attack flow has a SYN flag. Nine- and fifteen-column models still use it.",
+                "Update 4 (31 Oct 2026): a model input again, because the group settled on the original six feature groups (nine columns) as the default. The data check above still applies."],
       "expected": {"SYN Flag Cnt": "higher"}
     },
     {
@@ -165,7 +166,7 @@
       "expected": {"PSH Flag Cnt": "higher", "data_share": "higher"}
     }
   ],
-  "update3_note": "Features 12-15 were added in update 3 (22 Oct 2026) and are inputs of the default 21-column model. Their text was drafted in the project chat and is the same as in Week 3 of the UPDATE3 document; replace it if the group rewrites it. Notebook sections 9b and 9c test them.",
+  "update3_note": "Features 12-15 were added in update 3 (22 Oct 2026) as inputs of the 21-column model, which is no longer the default (update 4, 31 Oct 2026). Their text was drafted in the project chat and is the same as in Week 3 of the UPDATE3 document; replace it if the group rewrites it. Notebook sections 9b and 9c test them.",
   "dropped": {
     "number": 7,
     "title": "Flows to the same destination in a window",

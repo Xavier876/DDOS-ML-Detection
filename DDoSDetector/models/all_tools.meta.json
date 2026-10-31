@@ -1,27 +1,15 @@
 {
-  "title": "All tools (benign + LOIC-HTTP + LOIC-UDP + HOIC), 13 feature groups (21 columns)",
+  "title": "All tools (benign + LOIC-HTTP + LOIC-UDP + HOIC), 6 feature groups (9 columns)",
   "feature_columns": [
     "Flow Pkts/s",
     "Flow Byts/s",
     "Flow Duration",
     "Flow IAT Mean",
     "Flow IAT Std",
+    "SYN Flag Cnt",
     "Fwd Pkt Len Mean",
     "Fwd Pkt Len Std",
-    "fwd_bwd_ratio",
-    "Bwd Pkt Len Mean",
-    "RST Flag Cnt",
-    "FIN Flag Cnt",
-    "no_reply",
-    "empty_payload",
-    "iat_cv",
-    "bwd_fwd_bytes_ratio",
-    "Fwd IAT Mean",
-    "Fwd IAT Min",
-    "Active Mean",
-    "Idle Mean",
-    "PSH Flag Cnt",
-    "data_share"
+    "fwd_bwd_ratio"
   ],
   "feature_groups": [
     {
@@ -59,6 +47,14 @@
       ]
     },
     {
+      "number": 5,
+      "key": "syn_flag",
+      "title": "SYN flag count",
+      "columns": [
+        "SYN Flag Cnt"
+      ]
+    },
+    {
       "number": 6,
       "key": "fwd_pkt_len",
       "title": "Forward packet length",
@@ -66,78 +62,9 @@
         "Fwd Pkt Len Mean",
         "Fwd Pkt Len Std"
       ]
-    },
-    {
-      "number": 8,
-      "key": "reply",
-      "title": "Reply behaviour",
-      "columns": [
-        "Bwd Pkt Len Mean"
-      ]
-    },
-    {
-      "number": 9,
-      "key": "conn_end_flags",
-      "title": "Connection-ending flags",
-      "columns": [
-        "RST Flag Cnt",
-        "FIN Flag Cnt"
-      ]
-    },
-    {
-      "number": 10,
-      "key": "indicators",
-      "title": "No-reply and empty-payload indicators",
-      "columns": [
-        "no_reply",
-        "empty_payload"
-      ]
-    },
-    {
-      "number": 11,
-      "key": "timing_regularity",
-      "title": "Timing regularity",
-      "columns": [
-        "iat_cv"
-      ]
-    },
-    {
-      "number": 12,
-      "key": "response_ratio",
-      "title": "Response size ratio",
-      "columns": [
-        "bwd_fwd_bytes_ratio"
-      ]
-    },
-    {
-      "number": 13,
-      "key": "sender_timing",
-      "title": "Sender timing",
-      "columns": [
-        "Fwd IAT Mean",
-        "Fwd IAT Min"
-      ]
-    },
-    {
-      "number": 14,
-      "key": "activity",
-      "title": "Activity pattern",
-      "columns": [
-        "Active Mean",
-        "Idle Mean"
-      ]
-    },
-    {
-      "number": 15,
-      "key": "payload_signals",
-      "title": "Payload signals",
-      "columns": [
-        "PSH Flag Cnt",
-        "data_share"
-      ]
     }
   ],
-  "feature_set": "f21",
+  "feature_set": "f9",
   "label_mapping": {
     "contains 'benign'": "Benign",
     "contains 'udp'": "LOIC-UDP",
@@ -147,14 +74,14 @@
   },
   "positive_class": "DDoS (any tool) = 1, Benign = 0",
   "mode": "all_tools",
-  "setup": "all_tools_f21",
+  "setup": "all_tools",
   "held_out_tool": null,
   "benign_split_mode": "random",
   "benign_split": "random 70/30 stratified by tool",
   "timing": {
-    "train_seconds": 10.22,
+    "train_seconds": 8.48,
     "train_rows": 1572455,
-    "predict_seconds": 0.718,
+    "predict_seconds": 0.738,
     "predict_rows": 673910,
     "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
   },
@@ -197,8 +124,8 @@
     "n_test_benign": 300000,
     "n_test_attack": 373910,
     "recall": {
-      "HOIC": 0.9988,
-      "LOIC-HTTP": 0.9899,
+      "HOIC": 0.9987,
+      "LOIC-HTTP": 0.989,
       "LOIC-UDP": 1.0
     },
     "n_test": {
@@ -206,36 +133,36 @@
       "LOIC-HTTP": 172852,
       "LOIC-UDP": 519
     },
-    "fpr": 0.0083,
-    "false_alarms": 2479,
-    "pr_auc": 0.9992,
-    "roc_auc": 0.9991,
+    "fpr": 0.0104,
+    "false_alarms": 3133,
+    "pr_auc": 0.999,
+    "roc_auc": 0.999,
     "base_rate": 0.5548,
     "threshold_sweep": [
       {
         "threshold": 0.5,
-        "recall": 0.9946,
-        "fpr": 0.0083
+        "recall": 0.9942,
+        "fpr": 0.0104
       },
       {
         "threshold": 0.2,
-        "recall": 0.9988,
-        "fpr": 0.0168
+        "recall": 0.9983,
+        "fpr": 0.0181
       },
       {
         "threshold": 0.1,
-        "recall": 0.9997,
-        "fpr": 0.0207
+        "recall": 0.9993,
+        "fpr": 0.023
       },
       {
         "threshold": 0.05,
-        "recall": 0.9997,
-        "fpr": 0.0215
+        "recall": 0.9996,
+        "fpr": 0.0265
       },
       {
         "threshold": 0.01,
         "recall": 0.9998,
-        "fpr": 0.0258
+        "fpr": 0.0386
       }
     ]
   },
@@ -247,8 +174,8 @@
     "pandas": "3.0.6",
     "numpy": "2.5.4"
   },
-  "created": "2026-10-22T17:29:47+00:00",
-  "background_file": "all_tools_f21.background.parquet",
-  "model_file": "all_tools_f21.json",
-  "version": "3a2457b0af"
+  "created": "2026-10-31T22:59:29+00:00",
+  "background_file": "all_tools.background.parquet",
+  "model_file": "all_tools.json",
+  "version": "af0a61c69a"
 }

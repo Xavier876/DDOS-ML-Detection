@@ -6,8 +6,8 @@ r"""Train the XGBoost DDoS detector and write model, metadata and SHAP backgroun
     python -m train.train_model --mode hoic_held_out      (same as --mode held_out --held-out HOIC)
     python -m train.train_model --mode all_tools --seeds 0 1 2 3 4        (seed stability)
     python -m train.train_model --mode all_tools --extra-labelled feedback.csv   (retrain)
-    python -m train.train_model --mode all_tools --feature-set f9     (the original nine columns)
-Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f21.
+    python -m train.train_model --mode all_tools --feature-set f21    (the update-3 21 columns)
+Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f9.
 
 Follows ddos_xgboost_starter_v2.ipynb:
   all_tools  = section 10 baseline (random 70/30 split stratified by tool; optimistic)
@@ -15,10 +15,10 @@ Follows ddos_xgboost_starter_v2.ipynb:
                per_day        earlier 70% of each file's benign flows train, later 30% test (notebook)
                by_file        benign of the earlier file trains, the later file tests (notebook)
                attack_period  benign flows inside the held-out tool's attack window test, the rest train
-Feature sets come from the registry in app/core/features.py: f9 = the original nine columns,
-f15 = fifteen (features 1-6 and 8-11), f14 = f15 without SYN, f21 = f14 + features 12-15 (update 3,
-the default). Outputs are named <setup>_<set> (all_tools_f21, ...); f9 keeps the original names
-(all_tools, hoic_held_out, ...).
+Feature sets come from the registry in app/core/features.py: f9 = the original nine columns (the
+default since update 4), f15 = fifteen (features 1-6 and 8-11), f14 = f15 without SYN, f21 = f14 +
+features 12-15 (update 3). Outputs are named <setup>_<set> (all_tools_f21, ...); f9 keeps the
+original names (all_tools, hoic_held_out, ...).
 """
 from __future__ import annotations
 
@@ -304,8 +304,8 @@ def main(argv=None) -> int:
     ap.add_argument("--benign-split", choices=list(BENIGN_SPLITS), default="per_day",
                     help="held-out benign split (default per_day, as in the notebook)")
     ap.add_argument("--feature-set", choices=list(FEATURE_SETS), default=DEFAULT_FEATURE_SET,
-                    help="f21 = 21 columns, update 3 (default); f15 = fifteen; f14 = f15 without SYN; "
-                         "f9 = the original nine")
+                    help="f9 = the original nine (default, update 4); f21 = 21 columns, update 3; "
+                         "f15 = fifteen; f14 = f15 without SYN")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seeds", type=int, nargs="+",
                     help="train one model per seed (data loaded once), e.g. --seeds 0 1 2 3 4")

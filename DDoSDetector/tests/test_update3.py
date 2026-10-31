@@ -1,4 +1,5 @@
-"""Update 3: features 12-15 added, SYN Flag Cnt dropped; f21 (21 columns) is the default set."""
+"""Update 3: features 12-15 added, SYN Flag Cnt dropped from f21 (21 columns). The default set is f9
+again since update 4 (test_update4.py)."""
 import json
 
 import numpy as np
@@ -23,7 +24,7 @@ def test_feature_sets_without_syn():
     assert F.summary(f14) == "9 feature groups (14 columns)"
     assert F.summary(f21) == "13 feature groups (21 columns)"
     assert F.columns_for("f15") == F.FEATURES_F15 and len(F.FEATURES_F15) == 15   # kept for comparison
-    assert F.DEFAULT_FEATURE_SET == "f21" and F.FEATURES_F21 == f21
+    assert F.FEATURES_F21 == f21
     assert F.column_label("bwd_fwd_bytes_ratio") == "bwd_fwd_bytes_ratio (F12)"
     assert F.column_label("data_share") == "data_share (F15)"
 
@@ -77,12 +78,6 @@ def test_update3_notes_are_marked():
 
 
 @pytest.fixture(scope="module")
-def qapp():
-    from PySide6.QtWidgets import QApplication
-    return QApplication.instance() or QApplication([])
-
-
-@pytest.fixture(scope="module")
 def bundle21(flows):
     from xgboost import XGBClassifier
     from app.core.model_store import ModelBundle
@@ -99,16 +94,6 @@ def test_f21_model_scores_without_the_syn_column(bundle21):
     X, scores = score(bundle21, df)
     assert list(X.columns) == F.FEATURES_F21 and not np.isnan(scores).any()
     assert bundle21.feature_set == "f21"
-
-
-def test_f21_is_the_app_default_and_panel_marks_syn(qapp):
-    from app.ui.features_dialog import features_html
-    from app.ui.main_window import DEFAULT_MODELS
-    assert DEFAULT_MODELS == ("all_tools_f21",)        # older models were removed from this version
-    h = features_html(load_notes(FEATURE_NOTES), None)
-    assert "Model features (default set f21): 13 feature groups (21 columns)" in h
-    assert "Feature 5: SYN flag count — not in the default set" in h
-    assert "Feature 12: Response size ratio — not" not in h and "Added in update 3" in h
 
 
 def test_trained_f21_models_have_the_registry_columns():

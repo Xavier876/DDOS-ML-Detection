@@ -10,8 +10,10 @@ explains them with SHAP, and supports an analyst review/feedback loop. It is a u
 evidence for the report, **not a production IDS**. Correctness and honesty about the model's limits
 matter more than polish.
 
-Specs, in order of precedence: update 3 (decided in the project chat on 22 Oct 2026, no handoff file:
-features 12–15 added, SYN Flag Cnt dropped, default feature set `f21` = 21 columns) wins over
+Specs, in order of precedence: update 4 (31 Oct 2026, project chat, no handoff file: the group settled
+on the original six feature groups, so the default is `f9` = 9 columns again; done on branch
+`nine-column`, while `main` keeps update 3) wins over update 3 (decided in the project chat on 22 Oct
+2026, no handoff file: features 12–15 added, SYN Flag Cnt dropped, feature set `f21` = 21 columns), which wins over
 `docs/HANDOFF_UPDATE_2.md` (15 columns, feature registry), which wins over
 `docs/HANDOFF_UPDATE_1.md`, which wins over `docs/HANDOFF_desktop_app.md`;
 `notebooks/ddos_xgboost_starter_v2.ipynb` is the source of truth for the data pipeline (if it and a
@@ -31,9 +33,9 @@ Python is the project venv `.venv` (Python 3.14; the only interpreter on this ma
 `.\.venv\Scripts\python.exe`, never a bare `python`.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 79 tests, ~7 s, synthetic data
+.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 82 pass + 2 skipped, ~7 s, synthetic data
 .\.venv\Scripts\python.exe DDoSDetector\app\main.py [data\x.csv]   # run the app
-.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4] [--feature-set f9|f15|f14|f21]   # default f21
+.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4] [--feature-set f9|f15|f14|f21]   # default f9
 .\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP [--benign-split by_file|attack_period]
 .\.venv\Scripts\python.exe DDoSDetector\scripts\make_sample.py --rows 50000      # test CSVs in data\
 powershell -ExecutionPolicy Bypass -File DDoSDetector\build_exe.ps1             # PyInstaller -> bin\Release
@@ -67,11 +69,12 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - **Never call the model output a "confidence" or a "probability"** (UI, exports, code, docs). It is the
   "model score" (0–1, uncalibrated because of `scale_pos_weight`). A test scans `app/` and README.
 - **Feature columns are defined only in the registry** (`app/core/features.py`): never write a list
-  of model columns anywhere else (a test scans for it). Default model (update 3): **13 feature groups
-  (21 columns)**, set `f21` = f15 without SYN Flag Cnt plus groups 12–15. The user removed the nine-column
-  (`f9`) and fifteen-column (`f15`) models from this version (22 Oct 2026): only `*_f21` models ship;
-  don't add older models back or fall back to them. The code still loads an older model if one is
-  opened by hand (tests use synthetic f9/f15 models). Use `summary(columns)` for wording. Each
+  of model columns anywhere else (a test scans for it). Default model (update 4, branch `nine-column`):
+  **6 feature groups (9 columns)**, set `f9` = groups 1–6, model `all_tools`. Only nine-column models
+  ship on this branch (a test checks every `models/*.meta.json`); don't add 15- or 21-column models
+  back to `models/`. Groups 8–15 stay in the registry for the notebook's feature comparison. On `main`,
+  update 3 still holds (`f21`, only `*_f21` models). The code loads any model opened by hand (tests use
+  synthetic f9/f15/f21 models). Use `summary(columns)` for wording. Each
   model's `.meta.json` has `feature_columns`; the app builds exactly those (`model_columns(meta)`;
   no field = the original nine). IP addresses and timestamps are **never** model inputs
   (`Src IP`/`Dst IP`/`Dst Port` are kept only as alert tracing fields).
@@ -95,8 +98,10 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   Don't invent feature text; ask the user. Verdicts are computed from `feature_evidence.csv`.
 - When running notebooks, execute a **copy** (nbclient, cwd = `notebooks/`); don't save outputs into
   the user's notebooks.
-- Local Git repo on `main` (first commit 22 Oct 2026, identity set for this repo only); no remote.
-  Don't commit or push unless asked.
+- Local Git repo (first commit 22 Oct 2026, identity set for this repo only); no remote. Branches:
+  `main` (update 3, 21 columns) and `nine-column` (update 4, from 31 Oct 2026). A detached worktree
+  of the old nine-column app (`be5a288`) is at `..\DDOS-ML-Detection-9col`; its `.venv` is a junction to
+  this `.venv`. Don't commit or push unless asked.
 - Report only what was run. For GUI work, test headless and say what still needs a hand check.
 
 ## Gotchas
@@ -113,7 +118,10 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - PowerShell is the main shell; inline `python -c` with nested quotes breaks easily — write a script
   file in the scratchpad instead.
 - Docstrings containing Windows paths need `r"""` (invalid escape warnings).
-- Models matching `*_seed*` are git-ignored but needed locally by the Seed stability chart.
+- Models matching `*_seed*` are git-ignored but needed locally by the Seed stability chart. Both
+  branches share the folder: on `nine-column` the 21-column seed models sit in
+  `DDoSDetector\models\_f21_seeds\` (ignored, not listed by the app); move them back to `models\`
+  when working on `main`.
 - The 15- and 21-column results so far are the same as or very close to the nine-column ones (e.g.
   HOIC held out 0.212); notebook 9c shows no recall change larger than the seed spread. Report, don't
   interpret.
@@ -124,4 +132,8 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   original entry order), export PDF through Word COM (`ExportAsFixedFormat`), render pages with
   `pymupdf` (installed in the venv).
 - Windows Application Control (Smart App Control) blocked a freshly built `DDoSExplainer.exe` from
-  starting on 22 Oct 2026. Don't try to bypass it; tell the user.
+  starting on 22 Oct 2026, and on 26 Oct 2026 started blocking the PyPI build of
+  `.venv\Lib\site-packages\shap\_cutils.pyd` (`import shap` fails, so the app and most tests do too;
+  the Code Integrity log shows event 3077). The user rebuilt shap 0.54.1 from source in `.venv`
+  (`pip install --force-reinstall --no-deps --no-binary shap`), which loads. Don't try to bypass it;
+  tell the user. The bare `pip` on PATH belongs to the global Python, not `.venv`.
