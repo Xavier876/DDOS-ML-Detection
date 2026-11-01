@@ -302,7 +302,8 @@ counts than in the full file. Older random-row samples (`sample_wed_50k*.csv`) g
 that are far too low. These rows overlap with the training data, so metrics on them are optimistic.
 
 **Data quirk (21 Feb file):** almost all of its 360,833 benign flows fall inside the HOIC attack
-(02:17–02:33), about one per HOIC flow, with TCP destination ports in the 50,000s that each appear once.
+(02:17–02:33), about one per HOIC flow, sent to high TCP client ports (median 56,825, each port reused
+by many flows).
 They look like the web server's side of the HOIC connections labelled benign (our reading; the
 dataset does not say). So the attack-period benign split mostly tests those flows, not normal users
 of a busy server.

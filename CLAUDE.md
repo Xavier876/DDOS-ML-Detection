@@ -139,7 +139,8 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - pandas 3 parses these timestamps as `datetime64[us]`: never turn datetimes into seconds with
   `astype("int64") // 10**9`; subtract the epoch and use `.dt.total_seconds()` (as `_port_window` does).
 - 21 Feb file quirk: almost all of its 360,833 benign flows fall inside the HOIC attack (02:17–02:33),
-  about one per HOIC flow, to one-off TCP ports in the 50,000s: very likely the server side of HOIC
+  about one per HOIC flow, to high TCP client ports (median 56,825; each port reused by many flows,
+  feature 7 median 1): very likely the server side of HOIC
   connections labelled benign. The attack-period benign split mostly tests those flows; say so.
 - Sample CSVs: `make_sample.py` cuts whole time slices (`sample_wed_slices*.csv`); the older
   random-row `sample_wed_50k*.csv` give feature 7 counts that are far too low.
