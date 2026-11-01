@@ -11,9 +11,10 @@ The model score is the model's raw output and has not been calibrated (training 
 `scale_pos_weight`), so it is not a probability: do not read 0.9 as a 90% chance of an attack.
 
 **Model inputs (default, update 4): 6 feature groups (9 columns)**, numbered as in Week 3 of the
-project document. On 31 Oct 2026 the group settled on the original six feature groups (features 1–6),
-so this version ships only nine-column models. Groups 8–15 stay in the registry for the notebook's
-feature comparison but are not model inputs:
+project document. On 31 Oct 2026 the group settled on six feature groups. SYN flag count (feature 5)
+changed no result, so it was replaced by feature 7, the port version of the group's dropped
+"flows to the same destination in a window" (set `f9p`). This version ships only `f9p` models.
+Groups 8–15 stay in the registry for the notebook's feature comparison but are not model inputs:
 
 | # | Group | Columns |
 |---|---|---|
@@ -21,9 +22,9 @@ feature comparison but are not model inputs:
 | 2 | duration | `Flow Duration` |
 | 3 | forward/backward ratio | `fwd_bwd_ratio` = `Tot Fwd Pkts / (Tot Bwd Pkts + 1)` |
 | 4 | inter-arrival time | `Flow IAT Mean`, `Flow IAT Std` |
-| 5 | SYN flag count | `SYN Flag Cnt` (0/1 only in this data; no attack flow has it) |
+| 5 | *not in the default set*: SYN flag count | `SYN Flag Cnt` (0/1 only in this data; no attack flow has it) |
 | 6 | forward packet length | `Fwd Pkt Len Mean`, `Fwd Pkt Len Std` |
-| 7 | *dropped* | flows to the same destination in a 10 s window: the 21 Feb file has no `Dst IP` |
+| 7 | flows to the same destination port | `dst_port_flows_10s` = flows of the same file to the same `Dst Port` that started in the 10 whole seconds before this flow (looks back only) |
 | 8 | *not in the default set*: reply behaviour | `Bwd Pkt Len Mean` |
 | 9 | *not in the default set*: connection-ending flags | `RST Flag Cnt`, `FIN Flag Cnt` |
 | 10 | *not in the default set*: indicators | `no_reply` = (`Tot Bwd Pkts` == 0), `empty_payload` = (`Fwd Pkt Len Mean` == 0) |
@@ -38,8 +39,18 @@ update 3 (22 Oct 2026; their text was drafted in the project chat and is in Week
 `docs\Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx`). Notebook sections 9b/9c measure whether
 they help; the first comparison showed no recall change larger than the spread between seeds.
 
-Feature sets in the registry: `f9` (original nine, **the default**), `f15` (groups 1–6 and 8–11), `f14`
-(`f15` without SYN Flag Cnt), `f21` (`f14` + groups 12–15, update 3). Train any of them with `--feature-set`.
+**Feature 7** is the only feature built from many rows. The group planned it with the destination IP;
+the 21 Feb file has no `Dst IP` column, so it uses the destination port, which mixes every server
+using that port. It needs the **complete capture file** (on a random sample of rows the counts are far
+too low; `scripts\make_sample.py` therefore cuts whole time slices), and the CSV must contain
+`Timestamp` and `Dst Port`. They are used only to count flows; IP addresses, ports and timestamps are
+never model inputs themselves. It describes the traffic around a flow, so normal flows to a busy port
+during an attack or a flash crowd also get high counts. Experiment and caveats:
+`notebooks\ddos_update4_experiments.ipynb`.
+
+Feature sets in the registry: `f9p` (groups 1–4, 6 and 7, **the default**), `f9` (original nine),
+`f15` (groups 1–6 and 8–11), `f14` (`f15` without SYN Flag Cnt), `f21` (`f14` + groups 12–15, update 3).
+Train any of them with `--feature-set`.
 They are all defined in **one registry**, `DDoSDetector\app\core\features.py`, which training, scoring,
 SHAP, the Features panel and the tests read. Each model's `.meta.json` lists its exact
 `feature_columns`, so nine-, fifteen- and twenty-one-column models all load and score (models without
@@ -107,16 +118,18 @@ right-click → Add → Existing Item.
 ```
 
 - **File → Open flows CSV…** reads in the background (progress bar + Cancel). The CSV must contain
-  the raw columns the **active model** needs (for the default nine-column model: `Flow Pkts/s`,
-  `Flow Byts/s`, `Flow Duration`, `Flow IAT Mean`, `Flow IAT Std`, `SYN Flag Cnt`, `Fwd Pkt Len Mean`,
-  `Fwd Pkt Len Std`, `Tot Fwd Pkts`, `Tot Bwd Pkts`). If some are missing, a dialog names them and, when
+  the raw columns the **active model** needs (for the default `f9p` model: `Flow Pkts/s`,
+  `Flow Byts/s`, `Flow Duration`, `Flow IAT Mean`, `Flow IAT Std`, `Fwd Pkt Len Mean`,
+  `Fwd Pkt Len Std`, `Tot Fwd Pkts`, `Tot Bwd Pkts`, and for feature 7 `Timestamp` and `Dst Port`).
+  Open the **whole capture file** (or a time slice of it), not a random sample of rows: feature 7
+  counts the flows around each flow. If some columns are missing, a dialog names them and, when
   another model doesn't need them (only models opened by hand, since this version ships only
-  nine-column models), offers to score with that model instead; it
-  never scores with fewer features silently. `Label` and `Timestamp` are optional. Rows with
-  NaN/infinite values in the original nine columns are kept and shown as **Not scored**; for models
-  opened by hand that use features 8–15, missing values there are allowed (XGBoost handles them) and
-  counted in the summary bar.
-- The default model is `all_tools` (only nine-column models ship with this version). The status bar shows the model's
+  `f9p` models), offers to score with that model instead; it
+  never scores with fewer features silently. `Label` is optional. Rows with NaN/infinite values in
+  the original nine columns, or with an unreadable time or port, are kept and shown as **Not scored**;
+  for models opened by hand that use features 8–15, missing values there are allowed (XGBoost handles
+  them) and counted in the summary bar.
+- The default model is `all_tools_f9p` (only `f9p` models ship with this version). The status bar shows the model's
   name, its feature set and version.
 - **Threshold** slider/spin box re-flags instantly. Filter by flag and by model-score range
   (the *Uncertain* button shows 0.2–0.8). Click a column header to sort.
@@ -152,8 +165,8 @@ right-click → Add → Existing Item.
 - **Flash-crowd check** (needs `Label`): false positive rate on all benign flows vs benign flows at or
   above a percentile (default 99th) of `Flow Pkts/s` and `Flow Byts/s`. The dataset has no labelled
   flash crowd, so high-rate benign flows are a proxy.
-- **Help → Features…** lists the feature groups (1–6, 8–15, and 7 as dropped; 8–15 are marked as not
-  in the default set, 12–15 under "Added in update 3") with the Week 3 text (raw data, calculation, security behaviour, assumption, legitimate look-alike, evasion,
+- **Help → Features…** lists the feature groups 1–15 (5 and 8–15 are marked as not in the default
+  set, 12–15 under "Added in update 3", 7 with its update-4 note) with the Week 3 text (raw data, calculation, security behaviour, assumption, legitimate look-alike, evasion,
   notes), and for every column *what the data showed*: medians against benign flows from the same
   file, zero shares and single-feature AUC from `app\data\feature_evidence.csv` (notebook section 9b),
   with a computed verdict in plain words (supported / not supported so far / opposite of the
@@ -196,23 +209,25 @@ Units: the table's model score is a number from 0 to 1 (not calibrated); SHAP va
    .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --extra-labelled feedback_x.csv
    ```
    The feedback rows are added to the training split only (the test split stays comparable) and the
-   new model is saved as `all_tools_feedback` (use `--name` to change it), so the shipped model is
+   new model is saved as `all_tools_f9p_feedback` (use `--name` to change it), so the shipped model is
    not overwritten. Open it from the Model menu.
 
 ## Train
 
 ```powershell
-.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools                     # nine columns (default)
-.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --feature-set f21   # update-3 21 columns
+.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools                     # f9p (default)
+.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --feature-set f9    # original nine
 .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode hoic_held_out
 ```
 
-`--feature-set f9` (default) trains on the original nine columns and keeps the original names
-(`all_tools`, `hoic_held_out`, …); `f21` names the output `<setup>_f21` (`f15` → `<setup>_f15`,
-`f14` → `<setup>_f14`). As in the notebook, rows with
+`--feature-set f9p` (default) names the output `<setup>_f9p` (`f21` → `<setup>_f21`, `f15` →
+`<setup>_f15`, `f14` → `<setup>_f14`); `f9` keeps the original names (`all_tools`, `hoic_held_out`, …).
+Feature 7 is counted per file on every row read, before cleaning, as the app does for the file it
+opens. As in the notebook, rows with
 missing/infinite values in the original columns are dropped for training, duplicates are judged on
-the original columns only, and missing values in the new columns are left for XGBoost. If a file
-lacks a new raw column, the script prints it and leaves that group out (recorded in the metadata).
+the original columns only (not the port or feature 7, so the row count is unchanged: 8,788,935), and
+missing values in the new columns are left for XGBoost. If a file lacks a new raw column, the script
+prints it and leaves that group out (recorded in the metadata).
 
 Defaults read from `data\` and write to `DDoSDetector\models\` (override with `--data-dir`, `--out`).
 Each run takes about a minute (reading the 3.9 GB file is most of it) and writes:
@@ -243,23 +258,29 @@ and test-prediction time (shown in Help → About).
 
 Models in `DDoSDetector\models\` now (each model's own test split, threshold 0.5, from its metadata).
 
-Nine columns (the default, update 4; trained 31 Oct 2026):
+`f9p` (the default, update 4; trained 31 Oct 2026):
 
 | Model | Recall on the tool | FPR (false alarms) |
 |---|---|---|
-| `all_tools` (seeds 0–4) | HOIC 0.999, LOIC-HTTP 0.987–0.990, LOIC-UDP 1.000 | 0.0091–0.0108 |
-| `hoic_held_out` / `_by_file` / `_attack_period` | HOIC 0.212 / 0.149 / 0.153 | 0.0077 (17,493) / 0.0000 (7) / 0.0000 (0) |
-| `loic_http_held_out` / `_attack_period` | LOIC-HTTP 0.003 / 0.003 | 0.0055 (12,450) / 0.0062 (35,537) |
-| `loic_udp_held_out` / `_attack_period` | LOIC-UDP 1.000 / 1.000 (1,730 flows) | 0.0092 (20,754) / 0.0042 (7) |
+| `all_tools_f9p` (seeds 0–4) | HOIC 1.000, LOIC-HTTP 1.000, LOIC-UDP 1.000 | 0.0002–0.0003 (70–103) |
+| `hoic_held_out_f9p` / `_by_file_f9p` / `_attack_period_f9p` | HOIC 0.397 / 0.369 / 0.362 | 0.0020 (4,514) / 0.0000 (0) / 0.0000 (0) |
+| `loic_http_held_out_f9p` / `_attack_period_f9p` | LOIC-HTTP 0.002 / 0.003 | 0.0005 (1,218) / 0.0045 (25,701) |
+| `loic_udp_held_out_f9p` / `_attack_period_f9p` | LOIC-UDP 0.994 / 0.994 (1,730 flows) | 0.0023 (5,238) / 0.0000 (0) |
 
-Each held-out row is one seed, so small differences from earlier models may be within the
-seed-to-seed spread (notebook 9c measures that). Held-out LOIC-UDP is caught almost entirely through
-`fwd_bwd_ratio` (its flows send ~120,000 forward packets per backward packet; HOIC never exceeds 2,
-99% of benign flows are under 1.7): one extreme feature on 1,730 flows, not evidence of transfer to
-unseen tools.
+How to read it: the **all-tools** numbers are not trustworthy with feature 7, because training and test
+flows share the same seconds of the same attack. The held-out rows are the honest test: unseen HOIC is
+caught at about 0.36–0.40 (nine columns: 0.15–0.21), unseen LOIC-HTTP still at 0.002–0.003. The
+attack-period benign flows of the 21 Feb file are mostly the HOIC replies described below, so its zero
+false alarms say little about normal users. Each held-out row is one seed. Held-out LOIC-UDP is caught
+almost entirely through `fwd_bwd_ratio` (its flows send ~120,000 forward packets per backward packet):
+one extreme feature on 1,730 flows, not evidence of transfer to unseen tools. The experiment behind the
+choice (two seeds, every swap candidate, Random Forest and logistic regression) is in
+`notebooks\ddos_update4_experiments.ipynb`.
 
-Other feature sets are not shipped on this branch. They are in Git history (branch `main` has the
-21-column models) and can be retrained with `--feature-set f21` or `f15`:
+Other feature sets are not shipped on this branch. They are in Git history (commit `a61c4fa` has the
+nine-column models, branch `main` the 21-column ones) and can be retrained with `--feature-set`:
+- nine columns (`all_tools`, `hoic_held_out`, …, `f9`): all tools HOIC 0.999, LOIC-HTTP 0.987–0.990,
+  LOIC-UDP 1.000, FPR 0.0091–0.0108; held out HOIC 0.212 / 0.149 / 0.153, LOIC-HTTP 0.003, LOIC-UDP 1.000;
 - twenty-one columns (`*_f21`, on `main`): all tools HOIC 0.999, LOIC-HTTP 0.989–0.990, LOIC-UDP 1.000,
   FPR 0.0079–0.0084; held out HOIC 0.214 / 0.180 / 0.153 (per day / by file / attack period),
   LOIC-HTTP 0.003, LOIC-UDP 1.000 / 0.994;
@@ -273,9 +294,18 @@ Other feature sets are not shipped on this branch. They are in Git history (bran
 | `held_out` | trained on the other two tools + benign, tested on the held-out tool; per-day or by-file (notebook §7) or attack-period benign split |
 
 Small test files from the Wednesday CSV:
-`.\.venv\Scripts\python DDoSDetector\scripts\make_sample.py --rows 50000` (writes
-`sample_wed_50k.csv`, a no-label copy and a missing-column file to `data\`). These rows overlap
-with the training data, so metrics on them are optimistic.
+`.\.venv\Scripts\python DDoSDetector\scripts\make_sample.py --seconds 40` (writes
+`sample_wed_slices.csv`, a no-label copy and a missing-column file to `data\`). Because of feature 7
+it keeps every flow in two time slices (40 s of HOIC with the most benign flows, and the whole
+LOIC-UDP attack) instead of sampling rows at random; flows in the first 10 s of a slice get lower
+counts than in the full file. Older random-row samples (`sample_wed_50k*.csv`) give feature 7 counts
+that are far too low. These rows overlap with the training data, so metrics on them are optimistic.
+
+**Data quirk (21 Feb file):** almost all of its 360,833 benign flows fall inside the HOIC attack
+(02:17–02:33), about one per HOIC flow, with TCP destination ports in the 50,000s that each appear once.
+They look like the web server's side of the HOIC connections labelled benign (our reading; the
+dataset does not say). So the attack-period benign split mostly tests those flows, not normal users
+of a busy server.
 
 **Notebook outputs the app reads:** in `notebooks\ddos_xgboost_starter_v2.ipynb`, section 9b writes
 `DDoSDetector\app\data\feature_evidence.csv` (Help → Features) and section 9c writes
@@ -350,9 +380,12 @@ additivity on a 15-column model, both chart views, the feature-set comparison ch
 using only metadata, a scan that no feature list exists outside the registry, the Features panel's 10
 groups, and a scan for any claim that features 8–11 improve detection; for update 3: the f14/f21
 sets, the formulas of features 12–15 and a 21-column model scoring without `SYN Flag Cnt`; and for
-update 4: `f9` as the default set and app default, the Features panel marking 8–15 as not in the
-default set, and every model in `DDoSDetector\models\` having the nine columns. Tests use synthetic
-data, not the CSVs (the last check reads the trained models' metadata).
+update 4: `f9p` as the default set and app default, feature 7 against a hand-worked example (look
+back only, same second not counted, per capture file, row order irrelevant, text and parsed times
+equal, unreadable time or port → Not scored), the port staying text through the CSV reader, the
+missing-column check naming `Timestamp`/`Dst Port`, the model card and Features panel wording, and
+every model in `DDoSDetector\models\` using `f9p`. Tests use synthetic data, not the CSVs (the last
+check reads the trained models' metadata).
 
 ## Package
 

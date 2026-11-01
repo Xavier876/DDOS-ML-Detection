@@ -27,6 +27,11 @@ def make_flows(n=400, seed=0, with_label=True):
     for flag in ("RST Flag Cnt", "FIN Flag Cnt", "SYN Flag Cnt"):
         df[flag] = rng.integers(0, 3, n)
     df["Fwd Pkt Len Mean"] = np.where(rng.random(n) < 0.2, 0.0, df["Fwd Pkt Len Mean"])
+    # feature 7 inputs (text, as in the CSVs): attacks crowd port 80 within two minutes
+    start = pd.Timestamp("2018-02-21 02:00:00")
+    secs = np.sort(rng.integers(0, 120, n))
+    df["Timestamp"] = [(start + pd.Timedelta(seconds=int(s))).strftime("%d/%m/%Y %H:%M:%S") for s in secs]
+    df["Dst Port"] = np.where(attack, "80", rng.choice(["53", "443", "3389"], n))
     if with_label:
         df["Label"] = lab
     return df

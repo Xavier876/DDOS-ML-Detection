@@ -1,8 +1,8 @@
 {
-  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note). Features 12-15: Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx' (22 Oct 2026), text drafted in the project chat.",
+  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note). Features 12-15: Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx' (22 Oct 2026), text drafted in the project chat. Feature 7: see update4_note.",
   "hypothesis_note": "The assumptions below are hypotheses. Where the data did not support an assumption, this is stated.",
   "direction_note": "'Expected' is our reading of each assumption as a direction (higher / lower than benign, or just different), added only so the data can be compared with it. It is not in the Week 3 document; check it with the group. 'none' = the assumption states no direction for that column.",
-  "added_note": "Features 8 to 11 were added after the first experiments and features 12 to 15 in update 3, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do. Since update 4 (31 Oct 2026) the default model uses only features 1 to 6, so 8 to 15 are not model inputs.",
+  "added_note": "Features 8 to 11 were added after the first experiments and features 12 to 15 in update 3, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do. Since update 4 (31 Oct 2026) the default model uses features 1 to 4, 6 and 7, so 8 to 15 are not model inputs.",
   "groups": [
     {
       "number": 1,
@@ -59,7 +59,7 @@
       "notes": ["Limitation: UDP has no TCP flags, so this feature says nothing about LOIC-UDP flows.",
                 "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison.",
                 "Update 3 (22 Oct 2026): dropped from the default feature set f21 (and from f14). In this dataset the column holds only 0 or 1, and no attack flow has a SYN flag. Nine- and fifteen-column models still use it.",
-                "Update 4 (31 Oct 2026): a model input again, because the group settled on the original six feature groups (nine columns) as the default. The data check above still applies."],
+                "Update 4 (31 Oct 2026): the group settled on six feature groups, and SYN flag count was replaced by feature 7 in the default model (f9p). In the update-4 experiment, removing it changed no result. The original nine-column models (f9) still use it."],
       "expected": {"SYN Flag Cnt": "higher"}
     },
     {
@@ -72,6 +72,20 @@
       "evasion": "Yes, by padding or randomising payloads.",
       "notes": [],
       "expected": {"Fwd Pkt Len Mean": "none", "Fwd Pkt Len Std": "lower"}
+    },
+    {
+      "number": 7,
+      "status": "update4",
+      "raw_data": "Destination port and flow start time (Timestamp) for every flow in the same capture file",
+      "calculation": "dst_port_flows_10s = the number of flows to the same destination port whose start time falls in the 10 whole seconds before this flow's start second (seconds s-10 to s-1). It looks back only, so it can be counted while traffic arrives",
+      "behaviour": "This is the “many sources at once” signal. A DDoS attack shows up as many flows reaching one target together, which a single flow cannot show (the limitation from Week 1).",
+      "assumption": "The number of flows reaching a destination in a short window is much higher during an attack than in normal operation.",
+      "lookalike": "Yes. A flash crowd, such as a popular event, is the standard false positive for DDoS detection.",
+      "evasion": "Yes, by spreading the attack over a longer time or over more targets.",
+      "notes": ["Design note (from the document): this feature uses IP addresses and timestamps only to group flows. They are not given to the model as inputs, so the Week 2 rule still holds. It also means a row is no longer fully independent, so we split train and test by time or attack run so that groups do not leak across the split.",
+                "From the document's status note: grouping by port or time would probably be a weak substitute, because normal web traffic also uses the same ports.",
+                "Update 4 (31 Oct 2026): built with the destination port instead of the destination IP, because the 21 February file (HOIC and LOIC-UDP) has no destination IP column. The count therefore covers every server using that port, not one target. It needs the complete capture file: on a random sample of rows the counts are far too low. In the update-4 experiment (XGBoost, two seeds) it replaced SYN flag count; held-out results are in the models' metadata (Help → About)."],
+      "expected": {"dst_port_flows_10s": "higher"}
     },
     {
       "number": 8,
@@ -167,10 +181,5 @@
     }
   ],
   "update3_note": "Features 12-15 were added in update 3 (22 Oct 2026) as inputs of the 21-column model, which is no longer the default (update 4, 31 Oct 2026). Their text was drafted in the project chat and is the same as in Week 3 of the UPDATE3 document; replace it if the group rewrites it. Notebook sections 9b and 9c test them.",
-  "dropped": {
-    "number": 7,
-    "title": "Flows to the same destination in a window",
-    "assumption": "The number of flows reaching a destination in a short window is much higher during an attack than in normal operation.",
-    "status": "Dropped. The 21 February file (HOIC and LOIC-UDP) has no destination IP column, so this feature cannot be built for those tools. The model therefore judges each flow alone, which keeps the Week 1 limitation that a single flow cannot show many sources hitting one target."
-  }
+  "update4_note": "Feature 7 came back in update 4 (31 Oct 2026) in a port version and replaced SYN flag count in the default model. Its security behaviour, assumption, look-alike and evasion text is the group's Week 3 text for feature 7. 'Raw data needed' and 'How it is calculated' were drafted in the project chat for the port version; replace them if the group rewrites them. Notebook section 9b has no evidence rows for it yet."
 }

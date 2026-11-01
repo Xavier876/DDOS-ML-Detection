@@ -31,7 +31,7 @@ EXPECTED_F15 = ["Flow Pkts/s", "Flow Byts/s", "Flow Duration", "Flow IAT Mean", 
 def test_registry_column_order_and_groups():
     assert F.columns_for("f15") == EXPECTED_F15          # order matters for a trained model
     assert F.columns_for("f9") == EXPECTED_F15[:9]
-    assert [g.number for g in F.REGISTRY] == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15]   # no group 7
+    assert [g.number for g in F.REGISTRY] == list(range(1, 16))   # group 7 is back since update 4
     assert F.summary(F.FEATURES_F15) == "10 feature groups (15 columns)"
     assert F.column_label("empty_payload") == "empty_payload (F10)"
     assert F.feature_set_of(EXPECTED_F15) == "f15" and F.feature_set_of(EXPECTED_F15[:9]) == "f9"
@@ -226,7 +226,7 @@ def test_features_panel_lists_ten_groups(tmp_path, qapp):
     notes = load_notes(FEATURE_NOTES)
     without = features_html(notes, None)
     numbers = [int(n) for n in re.findall(r"<h3>Feature (\d+):", without)]
-    assert numbers == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 7]   # update-3 groups, then 7 as dropped
+    assert numbers == list(range(1, 16))   # feature 7 is back as a group since update 4
     assert "Run notebook section 9b" in without and "<td>0." not in without   # no numbers invented
     ev = pd.DataFrame([{"attack": "HOIC", "feature": "no_reply", "attack_median": 1.0,
                         "benign_median_same_day": 0.0, "direction": "higher", "attack_zero_share": 0.2,

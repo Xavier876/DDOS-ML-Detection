@@ -1,15 +1,15 @@
 {
-  "title": "HOIC held out (trained on LOIC-HTTP + LOIC-UDP + benign; attack-period benign split), 6 feature groups (9 columns)",
+  "title": "HOIC held out (trained on LOIC-HTTP + LOIC-UDP + benign; by-file benign split), 6 feature groups (9 columns)",
   "feature_columns": [
     "Flow Pkts/s",
     "Flow Byts/s",
     "Flow Duration",
     "Flow IAT Mean",
     "Flow IAT Std",
-    "SYN Flag Cnt",
     "Fwd Pkt Len Mean",
     "Fwd Pkt Len Std",
-    "fwd_bwd_ratio"
+    "fwd_bwd_ratio",
+    "dst_port_flows_10s"
   ],
   "feature_groups": [
     {
@@ -47,14 +47,6 @@
       ]
     },
     {
-      "number": 5,
-      "key": "syn_flag",
-      "title": "SYN flag count",
-      "columns": [
-        "SYN Flag Cnt"
-      ]
-    },
-    {
       "number": 6,
       "key": "fwd_pkt_len",
       "title": "Forward packet length",
@@ -62,9 +54,17 @@
         "Fwd Pkt Len Mean",
         "Fwd Pkt Len Std"
       ]
+    },
+    {
+      "number": 7,
+      "key": "port_window",
+      "title": "Flows to the same destination port",
+      "columns": [
+        "dst_port_flows_10s"
+      ]
     }
   ],
-  "feature_set": "f9",
+  "feature_set": "f9p",
   "label_mapping": {
     "contains 'benign'": "Benign",
     "contains 'udp'": "LOIC-UDP",
@@ -74,19 +74,15 @@
   },
   "positive_class": "DDoS (any tool) = 1, Benign = 0",
   "mode": "held_out",
-  "setup": "hoic_held_out_attack_period",
+  "setup": "hoic_held_out_by_file_f9p",
   "held_out_tool": "HOIC",
-  "benign_split_mode": "attack_period",
-  "benign_split": "attack_period: benign inside the held-out tool's attack window test, all other benign train",
-  "attack_window": [
-    "2018-02-21 02:11:08",
-    "2018-02-21 02:33:29"
-  ],
+  "benign_split_mode": "by_file",
+  "benign_split": "by_file: benign of the earlier file trains, benign of the later file tests",
   "timing": {
-    "train_seconds": 6.68,
+    "train_seconds": 8.45,
     "train_rows": 1577904,
-    "predict_seconds": 0.967,
-    "predict_rows": 1027080,
+    "predict_seconds": 0.993,
+    "predict_rows": 1029269,
     "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
   },
   "seed": 0,
@@ -109,7 +105,7 @@
   },
   "test_rows": {
     "HOIC": 668461,
-    "Benign": 358619
+    "Benign": 360808
   },
   "hyperparameters": {
     "n_estimators": 300,
@@ -122,10 +118,10 @@
   },
   "metrics": {
     "threshold": 0.5,
-    "n_test_benign": 358619,
+    "n_test_benign": 360808,
     "n_test_attack": 668461,
     "recall": {
-      "HOIC": 0.1531
+      "HOIC": 0.3694
     },
     "n_test": {
       "HOIC": 668461
@@ -134,31 +130,31 @@
     "false_alarms": 0,
     "pr_auc": 1.0,
     "roc_auc": 1.0,
-    "base_rate": 0.6508,
+    "base_rate": 0.6495,
     "threshold_sweep": [
       {
         "threshold": 0.5,
-        "recall": 0.1531,
+        "recall": 0.3694,
         "fpr": 0.0
       },
       {
         "threshold": 0.2,
-        "recall": 0.2799,
+        "recall": 0.3857,
         "fpr": 0.0
       },
       {
         "threshold": 0.1,
-        "recall": 0.3631,
+        "recall": 0.3857,
         "fpr": 0.0
       },
       {
         "threshold": 0.05,
-        "recall": 0.3631,
+        "recall": 0.3857,
         "fpr": 0.0
       },
       {
         "threshold": 0.01,
-        "recall": 0.4328,
+        "recall": 0.4414,
         "fpr": 0.0
       }
     ]
@@ -171,8 +167,8 @@
     "pandas": "3.0.6",
     "numpy": "2.5.4"
   },
-  "created": "2026-10-31T23:05:21+00:00",
-  "background_file": "hoic_held_out_attack_period.background.parquet",
-  "model_file": "hoic_held_out_attack_period.json",
-  "version": "a8479ce2a0"
+  "created": "2026-11-01T00:18:24+00:00",
+  "background_file": "hoic_held_out_by_file_f9p.background.parquet",
+  "model_file": "hoic_held_out_by_file_f9p.json",
+  "version": "61f460444d"
 }

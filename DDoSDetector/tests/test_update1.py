@@ -200,7 +200,7 @@ def test_feature_notes_cover_every_registry_group():
         assert set(n["expected"].values()) <= {"higher", "lower", "different", "none"}
         for k in ("raw_data", "calculation", "behaviour", "assumption", "lookalike", "evasion"):
             assert n[k]
-    assert "draft" not in notes and notes["dropped"]["number"] == 7
+    assert "draft" not in notes and "dropped" not in notes and by_num[7]["status"] == "update4"
 
 
 def test_features_panel_with_and_without_evidence(tmp_path, qapp):

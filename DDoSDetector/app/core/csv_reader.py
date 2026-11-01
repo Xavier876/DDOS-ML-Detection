@@ -11,7 +11,7 @@ from typing import Callable, Optional
 
 import pandas as pd
 
-from .features import (ALL_RAW, LABEL, OPTIONAL_COLUMNS, TRACING_COLUMNS, clean_frame,
+from .features import (ALL_RAW, CONTEXT_RAW, LABEL, OPTIONAL_COLUMNS, TRACING_COLUMNS, clean_frame,
                        missing_columns, normalise_columns)
 
 ROW_COL = "row"
@@ -53,7 +53,7 @@ def read_flows(
     if missing:
         raise MissingColumnsError(path, missing)
 
-    wanted = set(ALL_RAW) | set(OPTIONAL_COLUMNS) | set(extra_columns)
+    wanted = set(ALL_RAW) | set(CONTEXT_RAW) | set(OPTIONAL_COLUMNS) | set(extra_columns)
     usecols = [raw for raw, clean in zip(raw_header, normalise_columns(raw_header)) if clean in wanted]
     # Read as strings where repeated header rows might appear; clean_frame coerces numerics.
     # Tracing columns (IPs, port) are kept as text: they are never model inputs.

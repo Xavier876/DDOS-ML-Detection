@@ -6,8 +6,8 @@ r"""Train the XGBoost DDoS detector and write model, metadata and SHAP backgroun
     python -m train.train_model --mode hoic_held_out      (same as --mode held_out --held-out HOIC)
     python -m train.train_model --mode all_tools --seeds 0 1 2 3 4        (seed stability)
     python -m train.train_model --mode all_tools --extra-labelled feedback.csv   (retrain)
-    python -m train.train_model --mode all_tools --feature-set f21    (the update-3 21 columns)
-Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f9.
+    python -m train.train_model --mode all_tools --feature-set f9     (the original nine columns)
+Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f9p.
 
 Follows ddos_xgboost_starter_v2.ipynb:
   all_tools  = section 10 baseline (random 70/30 split stratified by tool; optimistic)
@@ -15,10 +15,12 @@ Follows ddos_xgboost_starter_v2.ipynb:
                per_day        earlier 70% of each file's benign flows train, later 30% test (notebook)
                by_file        benign of the earlier file trains, the later file tests (notebook)
                attack_period  benign flows inside the held-out tool's attack window test, the rest train
-Feature sets come from the registry in app/core/features.py: f9 = the original nine columns (the
-default since update 4), f15 = fifteen (features 1-6 and 8-11), f14 = f15 without SYN, f21 = f14 +
-features 12-15 (update 3). Outputs are named <setup>_<set> (all_tools_f21, ...); f9 keeps the
-original names (all_tools, hoic_held_out, ...).
+Feature sets come from the registry in app/core/features.py: f9p = features 1-4, 6 and 7 (SYN
+replaced by the port window; the default since update 4), f9 = the original nine columns, f15 =
+fifteen (features 1-6 and 8-11), f14 = f15 without SYN, f21 = f14 + features 12-15 (update 3).
+Outputs are named <setup>_<set> (all_tools_f9p, ...); f9 keeps the original names (all_tools,
+hoic_held_out, ...). Feature 7 is built per file on every row read, before the cleaning below,
+because the app builds it on every row of the file it opens.
 """
 from __future__ import annotations
 
@@ -39,9 +41,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.core.csv_reader import read_flows  # noqa: E402
 from app.core.features import (  # noqa: E402
-    ATTACK_TOOLS, CORE_RAW, DEFAULT_FEATURE_SET, EXTRA_RAW, FEATURE_SETS, FEATURES_F9, LABEL,
-    LABEL_MAPPING, TIME, build_features, buildable_columns, columns_for, groups_for, summary,
-    tools_from_labels,
+    ATTACK_TOOLS, CAPTURE_COLUMN, CONTEXT_COLUMNS, CONTEXT_RAW, CORE_RAW, DEFAULT_FEATURE_SET, EXTRA_RAW,
+    FEATURE_SETS, FEATURES_F9, LABEL, LABEL_MAPPING, PORT, TIME, build_features, buildable_columns,
+    columns_for, groups_for, parse_timestamps, summary, tools_from_labels,
 )
 from app.core.model_store import save_bundle  # noqa: E402
 from app.core.timing import Stopwatch  # noqa: E402
@@ -97,9 +99,9 @@ def load(data_dir: Path, nrows: int | None) -> pd.DataFrame:
         d = read_flows(data_dir / name, chunksize=1_000_000, chunk_filter=keep_known, nrows=nrows,
                        required_for=FEATURES_F9)       # extra columns are read when present
         d = d.drop(columns=["row"])
-        d[TIME] = parse_time(d[TIME])
-        d["source_file"] = name
-        for c in EXTRA_RAW:
+        d[TIME] = parse_timestamps(d[TIME])
+        d[CAPTURE_COLUMN] = name
+        for c in EXTRA_RAW + [PORT]:
             if c not in d.columns:
                 print(f"   optional column missing in {name} (left as missing values): {c}")
         print(f"  {name}: {len(d):,} benign/DDoS rows ({time.time() - t0:.0f}s)")
@@ -107,24 +109,21 @@ def load(data_dir: Path, nrows: int | None) -> pd.DataFrame:
     df = pd.concat(parts, ignore_index=True)
     df["y"] = (df["tool"] != "Benign").astype(int)
 
+    # Feature 7 counts every flow of each file (per CAPTURE_COLUMN), as the app does for the file it
+    # opens, so it is built before the cleaning below and joined back by row.
+    context = (build_features(df, CONTEXT_COLUMNS) if all(c in df.columns for c in CONTEXT_RAW)
+               else pd.DataFrame(index=df.index))
     n0 = len(df)
     # As in the notebook: drop rows with NaN/inf in the ORIGINAL columns only (extras may be missing),
-    # and judge duplicates on the original columns only, so row counts match earlier runs.
+    # and judge duplicates on the original columns only (not the port, which earlier runs did not
+    # read), so row counts match earlier runs.
     df = df.dropna(subset=CORE_RAW)   # inf already turned into NaN
-    df = df.drop_duplicates(subset=[c for c in df.columns if c not in EXTRA_RAW + ["source_file"]])
+    df = df.drop_duplicates(subset=[c for c in df.columns if c not in EXTRA_RAW + [PORT, CAPTURE_COLUMN]])
     print(f"  cleaning: {n0:,} -> {len(df):,} rows")
-    df = df.reset_index(drop=True)
-    cols = buildable_columns(df.columns)
+    df = df.join(context).reset_index(drop=True)
+    cols = [c for c in buildable_columns(df.columns) if c not in CONTEXT_COLUMNS]
     df[cols] = build_features(df, cols)
     return df
-
-
-def parse_time(s: pd.Series) -> pd.Series:
-    t = pd.to_datetime(s, format="%d/%m/%Y %H:%M:%S", errors="coerce")
-    bad = t.isna() & s.notna()
-    if bad.any():  # fall back to the notebook's flexible day-first parsing
-        t[bad] = pd.to_datetime(s[bad], dayfirst=True, errors="coerce")
-    return t
 
 
 def split_all_tools(df: pd.DataFrame, seed: int):
@@ -304,8 +303,8 @@ def main(argv=None) -> int:
     ap.add_argument("--benign-split", choices=list(BENIGN_SPLITS), default="per_day",
                     help="held-out benign split (default per_day, as in the notebook)")
     ap.add_argument("--feature-set", choices=list(FEATURE_SETS), default=DEFAULT_FEATURE_SET,
-                    help="f9 = the original nine (default, update 4); f21 = 21 columns, update 3; "
-                         "f15 = fifteen; f14 = f15 without SYN")
+                    help="f9p = SYN replaced by the port window (default, update 4); f9 = the original "
+                         "nine; f21 = 21 columns, update 3; f15 = fifteen; f14 = f15 without SYN")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seeds", type=int, nargs="+",
                     help="train one model per seed (data loaded once), e.g. --seeds 0 1 2 3 4")

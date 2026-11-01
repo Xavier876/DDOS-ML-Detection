@@ -1,15 +1,15 @@
 {
-  "title": "LOIC-HTTP held out (trained on HOIC + LOIC-UDP + benign; per-day benign split), 6 feature groups (9 columns)",
+  "title": "LOIC-UDP held out (trained on HOIC + LOIC-HTTP + benign; per-day benign split), 6 feature groups (9 columns)",
   "feature_columns": [
     "Flow Pkts/s",
     "Flow Byts/s",
     "Flow Duration",
     "Flow IAT Mean",
     "Flow IAT Std",
-    "SYN Flag Cnt",
     "Fwd Pkt Len Mean",
     "Fwd Pkt Len Std",
-    "fwd_bwd_ratio"
+    "fwd_bwd_ratio",
+    "dst_port_flows_10s"
   ],
   "feature_groups": [
     {
@@ -47,14 +47,6 @@
       ]
     },
     {
-      "number": 5,
-      "key": "syn_flag",
-      "title": "SYN flag count",
-      "columns": [
-        "SYN Flag Cnt"
-      ]
-    },
-    {
       "number": 6,
       "key": "fwd_pkt_len",
       "title": "Forward packet length",
@@ -62,9 +54,17 @@
         "Fwd Pkt Len Mean",
         "Fwd Pkt Len Std"
       ]
+    },
+    {
+      "number": 7,
+      "key": "port_window",
+      "title": "Flows to the same destination port",
+      "columns": [
+        "dst_port_flows_10s"
+      ]
     }
   ],
-  "feature_set": "f9",
+  "feature_set": "f9p",
   "label_mapping": {
     "contains 'benign'": "Benign",
     "contains 'udp'": "LOIC-UDP",
@@ -74,15 +74,15 @@
   },
   "positive_class": "DDoS (any tool) = 1, Benign = 0",
   "mode": "held_out",
-  "setup": "loic_http_held_out",
-  "held_out_tool": "LOIC-HTTP",
+  "setup": "loic_udp_held_out_f9p",
+  "held_out_tool": "LOIC-UDP",
   "benign_split_mode": "per_day",
   "benign_split": "per_day: earlier 70% of each file's benign train, later 30% test",
   "timing": {
-    "train_seconds": 7.07,
-    "train_rows": 1670191,
-    "predict_seconds": 2.556,
-    "predict_rows": 2838946,
+    "train_seconds": 12.82,
+    "train_rows": 2244635,
+    "predict_seconds": 2.726,
+    "predict_rows": 2264502,
     "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
   },
   "seed": 0,
@@ -101,61 +101,61 @@
   "train_rows": {
     "Benign": 1000000,
     "HOIC": 668461,
-    "LOIC-UDP": 1730
+    "LOIC-HTTP": 576174
   },
   "test_rows": {
     "Benign": 2262772,
-    "LOIC-HTTP": 576174
+    "LOIC-UDP": 1730
   },
   "hyperparameters": {
     "n_estimators": 300,
     "max_depth": 6,
     "learning_rate": 0.1,
     "tree_method": "hist",
-    "scale_pos_weight": 1.4921119501753977,
+    "scale_pos_weight": 0.8034484005350966,
     "n_jobs": -1,
     "random_state": 0
   },
   "metrics": {
     "threshold": 0.5,
     "n_test_benign": 2262772,
-    "n_test_attack": 576174,
+    "n_test_attack": 1730,
     "recall": {
-      "LOIC-HTTP": 0.0031
+      "LOIC-UDP": 0.9936
     },
     "n_test": {
-      "LOIC-HTTP": 576174
+      "LOIC-UDP": 1730
     },
-    "fpr": 0.0055,
-    "false_alarms": 12450,
-    "pr_auc": 0.4072,
-    "roc_auc": 0.6667,
-    "base_rate": 0.203,
+    "fpr": 0.0023,
+    "false_alarms": 5238,
+    "pr_auc": 0.4685,
+    "roc_auc": 0.9995,
+    "base_rate": 0.0008,
     "threshold_sweep": [
       {
         "threshold": 0.5,
-        "recall": 0.0031,
-        "fpr": 0.0055
+        "recall": 0.9936,
+        "fpr": 0.0023
       },
       {
         "threshold": 0.2,
-        "recall": 0.0033,
-        "fpr": 0.0063
+        "recall": 1.0,
+        "fpr": 0.0032
       },
       {
         "threshold": 0.1,
-        "recall": 0.0035,
-        "fpr": 0.0072
+        "recall": 1.0,
+        "fpr": 0.0044
       },
       {
         "threshold": 0.05,
-        "recall": 0.0036,
-        "fpr": 0.0077
+        "recall": 1.0,
+        "fpr": 0.005
       },
       {
         "threshold": 0.01,
-        "recall": 0.0037,
-        "fpr": 0.0157
+        "recall": 1.0,
+        "fpr": 0.0068
       }
     ]
   },
@@ -167,8 +167,8 @@
     "pandas": "3.0.6",
     "numpy": "2.5.4"
   },
-  "created": "2026-10-31T23:02:17+00:00",
-  "background_file": "loic_http_held_out.background.parquet",
-  "model_file": "loic_http_held_out.json",
-  "version": "9f7b9d292b"
+  "created": "2026-11-01T00:16:42+00:00",
+  "background_file": "loic_udp_held_out_f9p.background.parquet",
+  "model_file": "loic_udp_held_out_f9p.json",
+  "version": "398a3e22ac"
 }

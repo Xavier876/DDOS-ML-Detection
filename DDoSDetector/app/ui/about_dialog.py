@@ -9,7 +9,7 @@ import html
 
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayout
 
-from app.core.features import DROPPED_GROUP_7, column_label, feature_set_of, groups_for, summary
+from app.core.features import GROUP_7_NOTE, column_label, feature_set_of, groups_for, summary
 from app.core.model_store import held_out_results, model_columns
 
 NINE_COLUMN_FINDING = ("Observed with the nine-column model: the model detects DDoS tools it was trained on "
@@ -19,6 +19,11 @@ FIFTEEN_COLUMN_FRAMING = ("Detection of known tools versus no transfer to unseen
                           "numbers below report; they come from the training script's own evaluation "
                           "(model metadata). Features 8 to 11 were added after the first experiments and 12 to 15 "
                           "in update 3; notebook section 9c and the Feature-set comparison tab report their effect.")
+PORT_WINDOW_FRAMING = ("Detection of known tools versus no transfer to unseen tools was observed with the original "
+                       "nine-column model. This model replaces SYN flag count with feature 7, the number of flows to "
+                       "the same destination port in the previous 10 seconds (update 4). Feature 7 describes the "
+                       "traffic around a flow, not the flow itself. Whether it changes the picture is what the numbers "
+                       "below report; they come from the training script's own evaluation (model metadata).")
 
 CALIBRATION_NOTE = ("The score is the model's raw output and has not been calibrated. Do not read 0.9 "
                     "as a 90% chance of an attack.")
@@ -50,8 +55,13 @@ LIMITATIONS = [
     "Attack tool and capture day are confounded: LOIC-HTTP is only in the 20 Feb file, HOIC "
     "and LOIC-UDP only in the 21 Feb file.",
     "LOIC-UDP has only about 1,730 flows, so any LOIC-UDP result is noisy.",
-    "Feature 7 (flows to the same destination in a window) was dropped: the 21 Feb file has no Dst IP "
-    "column, so each flow is judged alone. IP addresses and timestamps are never model inputs.",
+    "Feature 7 counts flows to the same destination port, not the same destination IP (the 21 Feb file has "
+    "no Dst IP column), so it mixes every server using that port. Normal flows to a busy port during an "
+    "attack or a flash crowd get high counts too, and the counts depend on how busy the network is. "
+    "Models without feature 7 judge each flow alone.",
+    "Feature 7 needs the complete capture file: on a random sample of rows the counts are far too low. "
+    "Timestamps and ports are used only to count flows; IP addresses, ports and timestamps are never model "
+    "inputs themselves.",
     "This is a university demo (COMP6310), not a production intrusion detection system. "
     "Scores on traffic from other networks, dates or tools should not be trusted.",
     "SHAP values explain the model, not the attack: they show what the model relies on, "
@@ -82,7 +92,7 @@ def _inputs_html(columns: list[str]) -> str:
                     f"{html.escape(', '.join(c for c in g.output_columns if c in columns))}</li>"
                     for g in groups_for(columns))
     return (f"<h3>Model inputs: {summary(columns)}</h3><ul>{items}</ul>"
-            f"<p style='color:#52514e'>{html.escape(DROPPED_GROUP_7)} Help → Features shows each feature's "
+            f"<p style='color:#52514e'>{html.escape(GROUP_7_NOTE)} Help → Features shows each feature's "
             "assumption next to what the data showed.</p>")
 
 
@@ -95,7 +105,7 @@ def model_card_html(meta: dict | None, timings=None, version: str = "", models_d
            "in Network Traffic</i>. XGBoost on CICFlowMeter flows from CSE-CIC-IDS2018 "
            "(20 and 21 Feb 2018), explained with SHAP (TreeExplainer).</p>",
            f"<p style='font-size:14px; padding:8px; background:#fdecec; border-left:4px solid #e34948'>"
-           f"<b>{html.escape(NINE_COLUMN_FINDING if nine else FIFTEEN_COLUMN_FRAMING)}</b></p>"]
+           f"<b>{html.escape(NINE_COLUMN_FINDING if nine else PORT_WINDOW_FRAMING if fset == 'f9p' else FIFTEEN_COLUMN_FRAMING)}</b></p>"]
     if nine:
         out.append("<h3>Recorded project results (nine-column model)</h3>"
                    "<table border='1' cellspacing='0' cellpadding='5'><tr><th>Setting</th><th>Result</th></tr>"

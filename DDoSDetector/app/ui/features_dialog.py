@@ -82,6 +82,8 @@ def features_html(notes: dict, evidence: pd.DataFrame | None) -> str:
         not_default = "" if g.number in default else " — not in the default set"
         out.append(f"<h3>Feature {g.number}: {html.escape(g.title)}{not_default} "
                    f"<span style='color:#52514e; font-weight:normal'>({html.escape(', '.join(g.output_columns))})</span></h3>")
+        if n.get("status") == "update4":
+            out.append(f"<p style='color:#b85c00'>⚠ {html.escape(notes.get('update4_note', ''))}</p>")
         out.append("<table cellpadding='2'>")
         for key, label in _FIELDS:
             out.append(f"<tr><td valign='top' width='230'><b>{label}</b></td>"

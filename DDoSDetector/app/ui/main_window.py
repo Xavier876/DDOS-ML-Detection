@@ -31,7 +31,7 @@ from app.ui.results_table import ResultsData, ResultsTableModel
 from app.workers import Jobs
 
 log = logging.getLogger(__name__)
-DEFAULT_MODELS = ("all_tools",)   # first one found is loaded at start-up (nine columns, update 4)
+DEFAULT_MODELS = ("all_tools_f9p",)   # first one found is loaded at start-up (update 4)
 VERDICT_SHORTCUTS = {rv.CONFIRMED: "Ctrl+1", rv.FALSE_POSITIVE: "Ctrl+2", rv.UNSURE: "Ctrl+3",
                      rv.UNREVIEWED: "Ctrl+0"}
 
