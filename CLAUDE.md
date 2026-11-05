@@ -23,7 +23,10 @@ handoff disagree, the notebook wins and the user is told). The group's Week 3 fe
 copy with Weeks 3 and 4 updated for update 3: `docs/Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx`,
 and on 4 Nov 2026 one with Weeks 3–4 updated for update 4 plus a new Week 5 (deployment pipeline):
 `docs/Weeks_1_to_5_-_DDoS_Detection_Project_UPDATE4.docx` (built from the UPDATE3 copy by exact-match XML
-edits; update-4 changes are marked "Update 4" next to the earlier text).
+edits; update-4 changes are marked "Update 4" next to the earlier text). Week 5 follows the group's
+decisions of 4 Nov 2026: offline static data (live capture/SIEM only as future work), alerts = flag at a
+threshold chosen after testing (proposal: keep 0.5), XGBoost with Random Forest as the one comparison
+model, retraining shown by a demonstration. Its evidence is `notebooks/ddos_week5_threshold_retraining.ipynb`.
 `docs/COMP6310_Project_Handoff.md` is the project-level summary from another chat (testing plan,
 papers, user preferences); it predates the app, so where it conflicts with the update (e.g. it says
 "confidence score") the update wins. The latest session summary is `docs/HANDOFF_SESSION_1.md`.
