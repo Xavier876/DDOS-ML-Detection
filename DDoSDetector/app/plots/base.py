@@ -28,7 +28,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from app.core.explain import ExplainerCache, ShapResult, group_shap
+from app.core.explain import ExplainerCache, ShapResult, group_shap, output_unit, score_of
 from app.core.features import column_label
 
 _REGISTRY: list[type["ChartPlugin"]] = []
@@ -63,7 +63,7 @@ def shap_view(values: np.ndarray, data: pd.DataFrame, view: int):
 
 @dataclass
 class ChartContext:
-    model: object                       # XGBClassifier
+    model: object                       # XGBClassifier, RandomForestClassifier or LinearSVMModel
     model_title: str
     X: pd.DataFrame                     # model inputs for every loaded row
     scores: np.ndarray                  # model score 0..1 (not calibrated), NaN = not scored
@@ -84,6 +84,16 @@ class ChartContext:
     @property
     def has_label(self) -> bool:
         return self.tools is not None
+
+    @property
+    def unit(self) -> str:
+        """Unit of the active model's SHAP values and f(x): 'log-odds' (XGBoost), 'model score'
+        (Random Forest) or 'SVM decision value' (linear SVM)."""
+        return output_unit(self.model) if self.model is not None else "log-odds"
+
+    def score_of(self, fx):
+        """Model score (0..1) for a model output f(x) in SHAP units."""
+        return score_of(self.model, fx)
 
     @property
     def scored_rows(self) -> np.ndarray:

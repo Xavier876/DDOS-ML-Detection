@@ -46,6 +46,13 @@ class Review:
                 self.notes.pop(pos, None)
         self.dirty = True
 
+    def set_many(self, positions, verdict: int):
+        """One verdict for many rows at once (bulk labelling, e.g. a whole incident)."""
+        pos = np.asarray(positions, dtype=np.int64)
+        if len(pos):
+            self.verdicts[pos] = verdict
+            self.dirty = True
+
     def reviewed_positions(self) -> np.ndarray:
         pos = set(np.flatnonzero(self.verdicts != UNREVIEWED).tolist()) | set(self.notes)
         return np.array(sorted(pos), dtype=np.int64)

@@ -8,11 +8,10 @@ import json
 
 import numpy as np
 import pandas as pd
-from xgboost import XGBClassifier
 
 from app.core.explain import contributions
 from app.core.features import column_label
-from app.core.model_store import META_SUFFIX, list_models, model_columns, setup_of
+from app.core.model_store import META_SUFFIX, list_models, load_model_of, model_columns, setup_of
 
 from . import _style as S
 from .base import ChartPlugin, message, register
@@ -34,7 +33,8 @@ def seed_variants(models_dir, setup: str) -> list[tuple[int, str, object]]:
 
 def mean_abs_shap_for(ctx, entries: list[tuple[str, object]]) -> pd.DataFrame:
     """Features x models table of mean |SHAP| on the SAME sample of loaded flows.
-    `entries` is a list of (column label, meta_path)."""
+    `entries` is a list of (column label, meta_path). Each model's SHAP values are in its own units
+    (see app/core/explain.py); the charts compare ranks, which do not depend on the units."""
     sample = ctx.sample_shap()
     source = ctx.X_all.iloc[sample.rows] if ctx.X_all is not None else sample.data
     cols = {}
@@ -43,9 +43,7 @@ def mean_abs_shap_for(ctx, entries: list[tuple[str, object]]) -> pd.DataFrame:
         features = model_columns(meta)
         if any(c not in source.columns for c in features):
             continue            # this model needs columns the loaded CSV cannot provide
-        name = meta_path.name[: -len(META_SUFFIX)]
-        model = XGBClassifier()
-        model.load_model(meta_path.parent / meta.get("model_file", f"{name}.json"))
+        model = load_model_of(meta_path, meta)
         cols[label] = pd.Series(np.abs(contributions(model, source[features])).mean(axis=0), index=features)
     out = pd.DataFrame(cols)
     out.index = [column_label(c) for c in out.index]

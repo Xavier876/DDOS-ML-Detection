@@ -1,0 +1,61 @@
+split,benign_split,seed,set,n_cols,recall,fpr,false_alarms,pr_auc,fit_s
+all tools,random,0,6 groups (f9p),9,0.9998,0.0003,103,1.0,10.5
+all tools,random,0,+ F13 sender timing,11,0.9998,0.0003,104,1.0,11.0
+all tools,random,0,+ F10 no-reply/empty,11,0.9998,0.0003,102,1.0,10.0
+all tools,random,0,+ F9 RST/FIN flags,11,0.9998,0.0003,102,1.0,9.8
+all tools,random,0,+ F13 + F10 (8 groups),13,0.9998,0.0003,100,1.0,10.6
+all tools,random,0,+ F13 + F9 (8 groups),13,0.9998,0.0003,97,1.0,11.7
+HOIC held out,per_day,0,6 groups (f9p),9,0.3967,0.002,4514,0.9392,10.3
+HOIC held out,per_day,0,+ F13 sender timing,11,0.3966,0.002,4523,0.9469,11.5
+HOIC held out,per_day,0,+ F10 no-reply/empty,11,0.3967,0.002,4513,0.9456,11.3
+HOIC held out,per_day,0,+ F9 RST/FIN flags,11,0.3967,0.002,4518,0.937,11.2
+HOIC held out,per_day,0,+ F13 + F10 (8 groups),13,0.3967,0.002,4570,0.9508,12.1
+HOIC held out,per_day,0,+ F13 + F9 (8 groups),13,0.3966,0.002,4556,0.9506,12.0
+HOIC held out,by_file,0,6 groups (f9p),9,0.3694,0.0,0,1.0,9.1
+HOIC held out,by_file,0,+ F13 sender timing,11,0.3658,0.0,0,0.999,9.8
+HOIC held out,by_file,0,+ F10 no-reply/empty,11,0.3659,0.0,0,1.0,9.7
+HOIC held out,by_file,0,+ F9 RST/FIN flags,11,0.3694,0.0,0,1.0,9.4
+HOIC held out,by_file,0,+ F13 + F10 (8 groups),13,0.3659,0.0,0,0.999,9.8
+HOIC held out,by_file,0,+ F13 + F9 (8 groups),13,0.3658,0.0,0,0.9998,9.9
+LOIC-HTTP held out,per_day,0,6 groups (f9p),9,0.0023,0.0005,1218,0.9054,11.3
+LOIC-HTTP held out,per_day,0,+ F13 sender timing,11,0.0023,0.0006,1360,0.8698,11.7
+LOIC-HTTP held out,per_day,0,+ F10 no-reply/empty,11,0.0023,0.0005,1194,0.9029,11.8
+LOIC-HTTP held out,per_day,0,+ F9 RST/FIN flags,11,0.0023,0.0005,1161,0.9246,11.7
+LOIC-HTTP held out,per_day,0,+ F13 + F10 (8 groups),13,0.0023,0.0006,1450,0.8971,12.1
+LOIC-HTTP held out,per_day,0,+ F13 + F9 (8 groups),13,0.0305,0.0006,1351,0.9089,12.2
+LOIC-UDP held out,per_day,0,6 groups (f9p),9,0.9936,0.0023,5238,0.4685,14.2
+LOIC-UDP held out,per_day,0,+ F13 sender timing,11,0.9942,0.0019,4298,0.5578,15.4
+LOIC-UDP held out,per_day,0,+ F10 no-reply/empty,11,0.9936,0.0023,5120,0.4625,14.8
+LOIC-UDP held out,per_day,0,+ F9 RST/FIN flags,11,0.9821,0.0019,4241,0.4376,14.8
+LOIC-UDP held out,per_day,0,+ F13 + F10 (8 groups),13,0.9942,0.0018,4178,0.556,15.9
+LOIC-UDP held out,per_day,0,+ F13 + F9 (8 groups),13,0.9942,0.0019,4254,0.5262,16.9
+all tools,random,1,6 groups (f9p),9,0.9998,0.0002,70,1.0,9.8
+all tools,random,1,+ F13 sender timing,11,0.9998,0.0002,69,1.0,11.3
+all tools,random,1,+ F10 no-reply/empty,11,0.9997,0.0002,71,1.0,11.2
+all tools,random,1,+ F9 RST/FIN flags,11,0.9997,0.0002,71,1.0,9.5
+all tools,random,1,+ F13 + F10 (8 groups),13,0.9998,0.0002,70,1.0,10.5
+all tools,random,1,+ F13 + F9 (8 groups),13,0.9998,0.0002,71,1.0,10.0
+HOIC held out,per_day,1,6 groups (f9p),9,0.3951,0.0019,4282,0.9152,11.0
+HOIC held out,per_day,1,+ F13 sender timing,11,0.3951,0.0019,4203,0.925,11.4
+HOIC held out,per_day,1,+ F10 no-reply/empty,11,0.3951,0.0019,4239,0.9145,10.8
+HOIC held out,per_day,1,+ F9 RST/FIN flags,11,0.3951,0.0019,4281,0.9176,11.2
+HOIC held out,per_day,1,+ F13 + F10 (8 groups),13,0.3951,0.0019,4278,0.9236,11.8
+HOIC held out,per_day,1,+ F13 + F9 (8 groups),13,0.3951,0.0019,4210,0.9146,11.9
+HOIC held out,by_file,1,6 groups (f9p),9,0.3642,0.0,0,0.9998,8.8
+HOIC held out,by_file,1,+ F13 sender timing,11,0.3643,0.0,0,0.9992,9.6
+HOIC held out,by_file,1,+ F10 no-reply/empty,11,0.3642,0.0,0,0.9994,9.7
+HOIC held out,by_file,1,+ F9 RST/FIN flags,11,0.3643,0.0,0,0.9999,10.0
+HOIC held out,by_file,1,+ F13 + F10 (8 groups),13,0.3643,0.0,0,0.9992,10.2
+HOIC held out,by_file,1,+ F13 + F9 (8 groups),13,0.3642,0.0,0,0.9984,9.7
+LOIC-HTTP held out,per_day,1,6 groups (f9p),9,0.0023,0.0004,966,0.9425,11.2
+LOIC-HTTP held out,per_day,1,+ F13 sender timing,11,0.0265,0.0006,1466,0.9126,12.0
+LOIC-HTTP held out,per_day,1,+ F10 no-reply/empty,11,0.0023,0.0004,973,0.9223,12.5
+LOIC-HTTP held out,per_day,1,+ F9 RST/FIN flags,11,0.0022,0.0004,965,0.9413,11.5
+LOIC-HTTP held out,per_day,1,+ F13 + F10 (8 groups),13,0.0305,0.0007,1505,0.9255,12.3
+LOIC-HTTP held out,per_day,1,+ F13 + F9 (8 groups),13,0.0165,0.0006,1368,0.9231,12.3
+LOIC-UDP held out,per_day,1,6 groups (f9p),9,0.9936,0.0022,4886,0.5868,14.6
+LOIC-UDP held out,per_day,1,+ F13 sender timing,11,0.9931,0.0017,3771,0.5318,15.5
+LOIC-UDP held out,per_day,1,+ F10 no-reply/empty,11,0.9994,0.0021,4818,0.6216,16.1
+LOIC-UDP held out,per_day,1,+ F9 RST/FIN flags,11,0.9936,0.0021,4758,0.5642,16.1
+LOIC-UDP held out,per_day,1,+ F13 + F10 (8 groups),13,0.9931,0.0017,3845,0.4967,15.8
+LOIC-UDP held out,per_day,1,+ F13 + F9 (8 groups),13,0.9931,0.0016,3722,0.5183,16.2

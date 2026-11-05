@@ -123,7 +123,7 @@ def test_model_card_shows_timing_and_held_out_table(models_dir):
     from app.ui.about_dialog import model_card_html
     meta = load_bundle(models_dir / "hoic_held_out.meta.json").meta
     h = model_card_html(meta, models_dir=models_dir)
-    assert "1.5 s on 100 rows" in h and "Held-out results for every f9 model" in h and "loic_http_held_out" in h
+    assert "1.5 s on 100 rows" in h and "Held-out results for every f9 XGBoost model" in h and "loic_http_held_out" in h
 
 
 def _ctx(models_dir, with_label=True):

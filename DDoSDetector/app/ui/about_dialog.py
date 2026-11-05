@@ -1,7 +1,7 @@
 """About / Model card: honest framing and limitations, plus the active model's own metadata.
 
 Results are NOT hard-coded for current models: every number comes from model metadata. The group's
-recorded results are shown only for nine-column models, labelled as such (handoff update 2).
+recorded results are shown only for nine-column XGBoost models, labelled as such (handoff update 2).
 """
 from __future__ import annotations
 
@@ -10,7 +10,8 @@ import html
 from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayout
 
 from app.core.features import GROUP_7_NOTE, column_label, feature_set_of, groups_for, summary
-from app.core.model_store import held_out_results, model_columns
+from app.core.model_store import held_out_results, model_columns, model_type_from
+from app.core.models import LINEAR_SVM, MODEL_TYPES, RANDOM_FOREST, XGBOOST
 
 NINE_COLUMN_FINDING = ("Observed with the nine-column model: the model detects DDoS tools it was trained on "
                        "but does not transfer to unseen tools.")
@@ -37,6 +38,24 @@ SOC_WORKFLOW = (
     "(train_model.py --extra-labelled). Retraining is periodic and manual, and would be triggered by "
     "drift in the traffic or a rise in the false alarm rate. This app is a prototype of that loop; it "
     "does not connect to a real SIEM or block anything.")
+
+MODEL_TYPES_NOTE = ("The group compares three model types on the same flows, features and splits: XGBoost (the "
+                    "main model), Random Forest and a linear SVM (decided in November 2026). XGBoost and Random "
+                    "Forest are tree ensembles; the linear SVM draws one straight boundary through the "
+                    "log-scaled, standardised inputs, so it shows how much the trees add.")
+
+# How to read SHAP values and the score, per model type (see app/core/explain.py).
+SCORE_READING = {
+    XGBOOST: "SHAP values are in <b>log-odds</b>: base value + sum of SHAP values = the model's raw output "
+             "f(x), and model score = 1 / (1 + e<sup>−f(x)</sup>). Explained with SHAP's TreeExplainer (exact).",
+    RANDOM_FOREST: "SHAP values are in <b>model score</b> units: base value + sum of SHAP values = the score "
+                   "itself (the average over the trees of the DDoS share in the leaf each flow reaches). "
+                   "Explained with SHAP's TreeExplainer (exact).",
+    LINEAR_SVM: "SHAP values are in <b>SVM decision value</b> units: base value (the SVM's intercept) + sum of "
+                "SHAP values = the decision value f(x), and model score = 1 / (1 + e<sup>−f(x)</sup>), so 0.5 is "
+                "the SVM's own boundary. Each SHAP value is the feature's weight times its standardised, "
+                "log-scaled value (exact for a linear model).",
+}
 
 # The group's recorded results: nine-column model only (shown only for nine-column models).
 NINE_COLUMN_RESULTS = [
@@ -99,11 +118,13 @@ def _inputs_html(columns: list[str]) -> str:
 def model_card_html(meta: dict | None, timings=None, version: str = "", models_dir=None) -> str:
     columns = model_columns(meta or {})
     fset = feature_set_of(columns)
-    nine = fset == "f9"
+    kind = model_type_from(meta or {})
+    nine = fset == "f9" and kind == XGBOOST     # the recorded results came from nine-column XGBoost
     out = ["<h2>Explainable DDoS detection: model card</h2>",
            "<p>COMP6310 group project: <i>Explainable Machine Learning for DDoS Attack Detection "
-           "in Network Traffic</i>. XGBoost on CICFlowMeter flows from CSE-CIC-IDS2018 "
-           "(20 and 21 Feb 2018), explained with SHAP (TreeExplainer).</p>",
+           f"in Network Traffic</i>. Active model: <b>{MODEL_TYPES[kind]}</b> on CICFlowMeter flows from "
+           "CSE-CIC-IDS2018 (20 and 21 Feb 2018), explained with SHAP.</p>",
+           f"<p style='color:#52514e'>{html.escape(MODEL_TYPES_NOTE)}</p>",
            f"<p style='font-size:14px; padding:8px; background:#fdecec; border-left:4px solid #e34948'>"
            f"<b>{html.escape(NINE_COLUMN_FINDING if nine else PORT_WINDOW_FRAMING if fset == 'f9p' else FIFTEEN_COLUMN_FRAMING)}</b></p>"]
     if nine:
@@ -117,10 +138,10 @@ def model_card_html(meta: dict | None, timings=None, version: str = "", models_d
     out.append("<h3>Limitations</h3><ul>" + "".join(f"<li>{html.escape(x)}</li>" for x in LIMITATIONS) + "</ul>")
     out.append("<h3>Reading the scores</h3>"
                f"<p><b>{html.escape(CALIBRATION_NOTE)}</b></p>"
-               "<p>The table's <b>model score</b> is a number from 0 to 1. SHAP values are in "
-               "<b>log-odds</b>: base value + sum of SHAP values = the model's raw output f(x), and "
-               "model score = 1 / (1 + e<sup>−f(x)</sup>). A flow is flagged DDoS when its score is at "
-               "or above the threshold.</p>")
+               f"<p>The table's <b>model score</b> is a number from 0 to 1. {SCORE_READING[kind]} "
+               "A flow is flagged DDoS when its score is at or above the threshold. Scores from different "
+               "model types are on different scales, so the same threshold does not mean the same thing for "
+               "each.</p>")
     out.append(_inputs_html(columns))
     out.append(f"<h3>How this fits a SOC workflow</h3><p>{html.escape(SOC_WORKFLOW)}</p>")
 
@@ -130,7 +151,7 @@ def model_card_html(meta: dict | None, timings=None, version: str = "", models_d
 
     if meta:
         out.append(f"<h3>Active model: {html.escape(meta.get('title', '?'))}</h3>")
-        info = [("Model version", version or meta.get("version")),
+        info = [("Model type", MODEL_TYPES[kind]), ("Model version", version or meta.get("version")),
                 ("Feature set", f"{fset}: {summary(columns)}"),
                 ("Training mode", meta.get("mode")), ("Held-out tool", meta.get("held_out_tool") or "none"),
                 ("Benign split", meta.get("benign_split")), ("Seed", meta.get("seed")),
@@ -148,7 +169,8 @@ def model_card_html(meta: dict | None, timings=None, version: str = "", models_d
         if meta.get("mode") == "all_tools":
             out.append("<p style='color:#52514e'>Random split: optimistic upper bound (see limitations).</p>")
     if models_dir is not None:
-        out.append(_held_out_html(held_out_results(models_dir, fset), fset))
+        out.append(_model_types_html(held_out_results(models_dir, fset), fset))
+        out.append(_held_out_html(held_out_results(models_dir, fset, kind), fset, MODEL_TYPES[kind]))
     return "\n".join(out)
 
 
@@ -160,11 +182,43 @@ def _timing_text(t: dict | None) -> str | None:
             f"{t['predict_seconds']:.2f} s for {t['predict_rows']:,} rows ({rate:,.0f} flows/s)")
 
 
-def _held_out_html(rows: list[dict], fset: str) -> str:
+def _model_types_html(rows: list[dict], fset: str) -> str:
+    """One row per model type: its all-tools model (random split) and its held-out models (per-day
+    benign split), all with this feature set, numbers from their metadata. Empty if fewer than two
+    model types have been trained."""
+    tools = ["HOIC", "LOIC-HTTP", "LOIC-UDP"]
+
+    def cell(r, t):
+        v = (r or {}).get("recall", {}).get(t)
+        return "–" if v is None else f"{v:.3f}"
+
+    lines = []
+    for kind, label in MODEL_TYPES.items():
+        mine = [r for r in rows if r["model_type"] == kind]
+        seen = next((r for r in mine if r["held_out"] is None and r["split"] == "random"), None)
+        held = {r["held_out"]: r for r in mine if r["held_out"] and r["split"] == "per_day"}
+        if seen is None and not held:
+            continue
+        fpr = "–" if seen is None or seen["fpr"] is None else f"{seen['fpr']:.4f}"
+        lines.append(f"<tr><td>{label}</td>" + "".join(f"<td>{cell(seen, t)}</td>" for t in tools)
+                     + f"<td>{fpr}</td>" + "".join(f"<td>{cell(held.get(t), t)}</td>" for t in tools) + "</tr>")
+    if len(lines) < 2:
+        return ""
+    head = "".join(f"<th>{t}</th>" for t in tools)
+    return (f"<h3>Model types compared ({fset}, from their metadata)</h3>"
+            "<table border='1' cellspacing='0' cellpadding='4'><tr><th rowspan='2'>Model type</th>"
+            "<th colspan='4'>All tools seen (random split)</th>"
+            "<th colspan='3'>Tool held out (per-day benign split)</th></tr>"
+            f"<tr>{head}<th>FPR</th>{head}</tr>" + "".join(lines) + "</table>"
+            "<p style='color:#52514e'>Recall at threshold 0.5 on each model's own test split; – = not trained. "
+            "The seen-tools columns are an optimistic upper bound (see limitations). Chart: Model types tab.</p>")
+
+
+def _held_out_html(rows: list[dict], fset: str, kind_name: str = "XGBoost") -> str:
     rows = [r for r in rows if r["held_out"]]
     if not rows:
-        return (f"<p style='color:#52514e'>No held-out models with this feature set ({fset}) in the models "
-                "folder.</p>")
+        return (f"<p style='color:#52514e'>No held-out {kind_name} models with this feature set ({fset}) in "
+                "the models folder.</p>")
     body = "".join(
         f"<tr><td>{html.escape(r['held_out'])}</td><td>{html.escape(r['split'].replace('_', '-'))}</td>"
         f"<td>{r['recall'].get(r['held_out'], float('nan')):.3f}</td>"
@@ -175,7 +229,7 @@ def _held_out_html(rows: list[dict], fset: str) -> str:
             "fwd_bwd_ratio (~120,000 forward packets per backward packet, far beyond any benign or HOIC flow): "
             "one extreme value, on 1,730 flows, not evidence of transfer to unseen tools." if fset == "f9" else
             "LOIC-UDP has only about 1,730 flows, so its row is a stress test, not a reliable number.")
-    return (f"<h3>Held-out results for every {fset} model in the models folder (from their metadata)</h3>"
+    return (f"<h3>Held-out results for every {fset} {kind_name} model in the models folder (from their metadata)</h3>"
             "<table border='1' cellspacing='0' cellpadding='4'><tr><th>Held-out tool</th><th>Benign split</th>"
             "<th>Recall on it</th><th>Test flows</th><th>FPR (false alarms)</th><th>Model</th></tr>"
             + body + "</table><p style='color:#52514e'>Each model's own test split, threshold 0.5. "

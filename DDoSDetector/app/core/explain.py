@@ -1,9 +1,10 @@
-"""SHAP wrappers with a cached TreeExplainer.
+"""SHAP wrappers with a cached explainer, for every model type in app/core/models.py.
 
-SHAP values for XGBoost binary classification are in LOG-ODDS (the model's raw margin):
-    base_value + shap_values.sum() == model.predict(X, output_margin=True)
-The table shows the model score = sigmoid(f(x)), a number from 0 to 1 that is NOT a calibrated
-chance of attack (training used scale_pos_weight).
+What the SHAP values add up to (base_value + shap_values.sum() == f(x) for every flow):
+  XGBoost        LOG-ODDS (the raw margin, model.predict(X, output_margin=True)); score = sigmoid(f(x))
+  Random Forest  the model score itself (TreeSHAP on the forest's output); score = f(x)
+  Linear SVM     the SVM decision value; score = sigmoid(f(x)); exact: w_j * z_j (models.py)
+The table shows the model score, a number from 0 to 1 that is NOT a calibrated chance of attack.
 """
 from __future__ import annotations
 
@@ -17,21 +18,50 @@ import shap
 import xgboost as xgb
 
 from .features import column_label, groups_for
+from .models import LINEAR_SVM, RANDOM_FOREST, XGBOOST, model_type_of
 from .timing import Stopwatch
+
+# (unit of f(x) and the SHAP values, whether model score = sigmoid(f(x)))
+UNITS = {XGBOOST: ("log-odds", True), RANDOM_FOREST: ("model score", False),
+         LINEAR_SVM: ("SVM decision value", True)}
 
 
 def sigmoid(z):
     return 1.0 / (1.0 + np.exp(-np.asarray(z, dtype=float)))
 
 
-def contributions(model, X: pd.DataFrame) -> np.ndarray:
-    """Exact TreeSHAP values (log-odds) via XGBoost's own multithreaded implementation.
+def output_unit(model) -> str:
+    """'log-odds', 'model score' or 'SVM decision value': the unit of f(x) and of the SHAP values."""
+    return UNITS[model_type_of(model)][0]
 
-    Same values as shap.TreeExplainer(model) in tree_path_dependent mode, but much faster for
-    hundreds of thousands of rows (used for alert export and seed stability).
+
+def score_of(model, fx):
+    """Model score (0..1) for an output f(x) in the model's SHAP units."""
+    return sigmoid(fx) if UNITS[model_type_of(model)][1] else np.asarray(fx, dtype=float)
+
+
+def _ddos_part(sv) -> np.ndarray:
+    """TreeExplainer returns one set of values per class for a Random Forest; keep DDoS (the last)."""
+    if isinstance(sv, list):
+        sv = sv[-1]
+    sv = np.asarray(sv, dtype=float)
+    return sv[..., -1] if sv.ndim == 3 else sv
+
+
+def contributions(model, X: pd.DataFrame) -> np.ndarray:
+    """Exact SHAP values for many rows, in the model's own units (see the module docstring).
+
+    XGBoost: its own multithreaded TreeSHAP (same values as shap.TreeExplainer(model) in
+    tree_path_dependent mode, much faster for hundreds of thousands of rows). Random Forest:
+    shap.TreeExplainer. Linear SVM: w_j * z_j. Used for alert export and the stability charts.
     """
-    out = model.get_booster().predict(xgb.DMatrix(X), pred_contribs=True)
-    return np.asarray(out[:, :-1], dtype=float)   # last column is the bias (base value)
+    kind = model_type_of(model)
+    if kind == XGBOOST:
+        out = model.get_booster().predict(xgb.DMatrix(X), pred_contribs=True)
+        return np.asarray(out[:, :-1], dtype=float)   # last column is the bias (base value)
+    if kind == LINEAR_SVM:
+        return np.asarray(model.contributions(X), dtype=float)
+    return _ddos_part(shap.TreeExplainer(model).shap_values(X))
 
 
 def top_features(values: np.ndarray, names: list[str], k: int = 3) -> list[list[str]]:
@@ -57,14 +87,16 @@ def group_shap(values: np.ndarray, columns: list[str]) -> tuple[np.ndarray, list
 @dataclass
 class ShapResult:
     rows: np.ndarray          # positions into the loaded feature frame
-    values: np.ndarray        # (n, n_features) log-odds contributions
-    base_value: float         # expected model output in log-odds
+    values: np.ndarray        # (n, n_features) contributions, in the model's units (output_unit)
+    base_value: float         # expected model output, same units
     data: pd.DataFrame        # feature values for those rows
 
 
 class ExplainerCache:
-    """Holds one TreeExplainer per model and caches SHAP results per dataset.
+    """Holds one explainer per model and caches SHAP results per dataset.
 
+    XGBoost and Random Forest use shap.TreeExplainer (default tree_path_dependent mode: exact). The
+    linear SVM needs no explainer: its SHAP values are w_j * z_j (models.LinearSVMModel).
     Call reset(model, X, data_id) whenever the model or the data changes.
     Thread-safe enough for one worker at a time plus UI reads.
     `on_timing(label, seconds, n)` is called with measured times for new computations.
@@ -73,7 +105,8 @@ class ExplainerCache:
     def __init__(self, on_timing: Optional[Callable[[str, float, int], None]] = None):
         self._lock = threading.RLock()   # re-entrant: memo() computations may call explain_*()
         self._explainer = None
-        self._model_key = None
+        self._model = None
+        self._kind = None
         self.X: pd.DataFrame | None = None
         self.data_id = None
         self._rows: dict[int, np.ndarray] = {}
@@ -82,27 +115,37 @@ class ExplainerCache:
 
     def reset(self, model, X: pd.DataFrame | None, data_id) -> None:
         with self._lock:
-            if model is not self._model_key:
-                # Default tree_path_dependent mode: exact and fast for XGBoost.
-                self._explainer = shap.TreeExplainer(model) if model is not None else None
-                self._model_key = model
+            if model is not self._model:
+                self._kind = model_type_of(model) if model is not None else None
+                self._explainer = (shap.TreeExplainer(model)
+                                   if model is not None and self._kind != LINEAR_SVM else None)
+                self._model = model
             self.X, self.data_id = X, data_id
             self._rows.clear()
             self._global.clear()
 
     @property
+    def unit(self) -> str:
+        return UNITS[self._kind][0] if self._kind else UNITS[XGBOOST][0]
+
+    def score_of(self, fx):
+        """Model score (0..1) for a model output in this explainer's units."""
+        return sigmoid(fx) if (UNITS[self._kind][1] if self._kind else True) else np.asarray(fx, dtype=float)
+
+    @property
     def base_value(self) -> float:
+        if self._kind == LINEAR_SVM:
+            return self._model.intercept
         ev = self._explainer.expected_value
-        return float(np.ravel(ev)[0])
+        return float(np.ravel(ev)[-1])   # one value per class for a Random Forest: DDoS is the last
 
     def _shap(self, X: pd.DataFrame, label: str) -> np.ndarray:
         with Stopwatch() as sw:
-            sv = self._explainer.shap_values(X)
+            sv = (self._model.contributions(X) if self._kind == LINEAR_SVM
+                  else self._explainer.shap_values(X))
         if self.on_timing:
             self.on_timing(label, sw.seconds, len(X))
-        if isinstance(sv, list):  # some shap versions return [neg, pos]
-            sv = sv[-1]
-        return np.asarray(sv, dtype=float)
+        return _ddos_part(sv)
 
     def explain_row(self, pos: int) -> ShapResult:
         with self._lock:

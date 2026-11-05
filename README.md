@@ -1,14 +1,17 @@
 # Explainable DDoS detection (COMP6310)
 
 A desktop app (Python, PySide6) that loads CICFlowMeter flow CSVs from CSE-CIC-IDS2018,
-scores every flow with an XGBoost model (**flag** Benign / DDoS + **model score** from 0 to 1),
-explains the model with **SHAP** charts, and supports an analyst review and feedback loop.
+scores every flow with a trained model (**flag** Benign / DDoS + **model score** from 0 to 1),
+explains the model with **SHAP** charts, and supports an analyst review and feedback loop. XGBoost is
+the main model; Random Forest and a linear SVM are the group's comparison models, trained on the same
+splits and columns and usable in the app the same way (Model menu).
 
 > **Observed with the nine-column model:** it detects DDoS tools it was trained on but does not
 > transfer to unseen tools. See Help → About / Model card and the Held-out comparison tab.
 
-The model score is the model's raw output and has not been calibrated (training uses
-`scale_pos_weight`), so it is not a probability: do not read 0.9 as a 90% chance of an attack.
+The model score is the model's raw output and has not been calibrated (training uses class weights:
+`scale_pos_weight` for XGBoost, balanced class weights for the other two), so it is not a probability:
+do not read 0.9 as a 90% chance of an attack. Scores of different model types are on different scales.
 
 **Model inputs (default, update 4): 6 feature groups (9 columns)**, numbered as in Week 3 of the
 project document. On 31 Oct 2026 the group settled on six feature groups. SYN flag count (feature 5)
@@ -127,8 +130,8 @@ right-click → Add → Existing Item.
   `f9p` models), offers to score with that model instead; it
   never scores with fewer features silently. `Label` is optional. Rows with NaN/infinite values in
   the original nine columns, or with an unreadable time or port, are kept and shown as **Not scored**;
-  for models opened by hand that use features 8–15, missing values there are allowed (XGBoost handles
-  them) and counted in the summary bar.
+  for models opened by hand that use features 8–15, missing values there are allowed (the tree models
+  handle them; the linear SVM cannot, so for it such rows are Not scored) and counted in the summary bar.
 - The default model is `all_tools_f9p` (only `f9p` models ship with this version). The status bar shows the model's
   name, its feature set and version.
 - **Threshold** slider/spin box re-flags instantly. Filter by flag and by model-score range
@@ -136,7 +139,8 @@ right-click → Add → Existing Item.
 - **Select a row** to see its SHAP waterfall (one bar per column, labelled with its feature number,
   e.g. `empty_payload (F10)`). Other tabs: global importance (bar), beeswarm, SHAP by tool, model
   score histogram, **Operational impact**, **Threshold sweep**, **Flash-crowd check**, **Seed
-  stability**, **Model stability**, **Held-out comparison**, **Feature-set comparison**. Each chart has
+  stability**, **Model stability**, **Held-out comparison**, **Model types**, **Model types: features**,
+  **Feature-set comparison**. Each chart has
   *Save as PNG* and *Copy to clipboard*. Tabs that need a `Label` column are disabled without one.
 - **By column / by feature group**: the global bar, beeswarm and SHAP-by-tool charts have a choice
   above the chart. A group's value for a flow is the sum of its columns' SHAP values (SHAP is
@@ -154,8 +158,13 @@ right-click → Add → Existing Item.
   from the same testbed.
 - **Seed stability**: mean |SHAP| feature ranks for every model of the same setup trained with
   different seeds, on the same sample of loaded flows, plus the Spearman rank correlation between seeds.
-- **Model stability**: the same comparison across *models* with the active model's feature set (the
-  seed-0 model of every setup: all tools, each tool held out, each benign split).
+- **Model stability**: the same comparison across *models* with the active model's feature set and
+  model type (the seed-0 model of every setup: all tools, each tool held out, each benign split).
+- **Model types**: XGBoost, Random Forest and the linear SVM side by side: recall per tool when the
+  tool was seen in training and when it was held out (per-day split), and the all-tools model's false
+  positive rate, from the models' metadata. **Model types: features** ranks the columns by mean |SHAP|
+  for the all-tools model of each type on the same sample of loaded flows (ranks, because the SHAP
+  units differ by type).
 - **Held-out comparison**: recall on each tool when it was seen in training vs held out (per-day,
   by-file and attack-period benign splits), and each model's false positive rate, from the metadata
   of the models with the active model's feature set.
@@ -184,13 +193,29 @@ right-click → Add → Existing Item.
   note, the model's feature columns (and Label/actual tool when present).
 - Errors are shown in dialogs and logged to `DDoSDetector\logs\app.log`.
 
-Units: the table's model score is a number from 0 to 1 (not calibrated); SHAP values are
-**log-odds**. `base value + sum(SHAP) = f(x)` and `model score = sigmoid(f(x))`.
+Units: the table's model score is a number from 0 to 1 (not calibrated). SHAP values are in the
+model's own units, and `base value + sum(SHAP) = f(x)` for every flow:
+
+| Model | SHAP units, f(x) | Model score | Explainer |
+|---|---|---|---|
+| XGBoost | log-odds | `sigmoid(f(x))` | TreeSHAP (XGBoost's own, = shap's TreeExplainer) |
+| Random Forest | model score itself | `f(x)` (average over trees of the DDoS share in the leaf) | shap's TreeExplainer |
+| Linear SVM | SVM decision value | `sigmoid(f(x))`, so 0.5 is the SVM's own boundary | exact: weight × standardised log-scaled input |
+
+The charts label their axes with the active model's units.
 
 ### Analyst workflow and feedback
 
 1. **Verdicts:** right-click a row (or Ctrl+1 / Ctrl+2 / Ctrl+3 / Ctrl+0) to mark it *confirmed
-   attack*, *false positive*, *unsure* or *unreviewed*; *Edit note…* (Ctrl+N) adds free text.
+   attack*, *false positive*, *unsure* or *unreviewed*; *Edit note…* (Ctrl+N) adds free text to the
+   current row.
+   **Bulk labelling:** Shift-click selects a range of rows and Ctrl-click adds rows; the verdict then
+   applies to every selected row (more than 100 rows asks first). Right-click → *All N shown rows*
+   gives every row the current filters show one verdict (always asks first). To label a whole
+   incident, filter and sort the table (for example by Timestamp or Label), select the incident's
+   rows and mark them. Labelling only the alerts teaches a retrained model little: in the Week 5
+   retraining demonstration (`notebooks\ddos_week5_threshold_retraining.ipynb`) about 4,000 alert
+   labels left recall on a new tool at about 0.42, while 10,000 flows of the incident raised it to 0.99.
 2. **File → Save review… / Open review…** stores `review_<csvname>.json`: row number, source file,
    model score, flag and threshold at review time, verdict, note, model name and version. Opening it
    with the same CSV restores every verdict and note (matched by row number). The app asks before
@@ -210,7 +235,9 @@ Units: the table's model score is a number from 0 to 1 (not calibrated); SHAP va
    ```
    The feedback rows are added to the training split only (the test split stays comparable) and the
    new model is saved as `all_tools_f9p_feedback` (use `--name` to change it), so the shipped model is
-   not overwritten. Open it from the Model menu.
+   not overwritten. Open it with Model → Open model… (or restart the app; the Model menu lists the
+   models found at start-up). Feedback must come from the same version of the app as the training
+   script: a file exported by the old nine-column app has no feature 7 and is refused.
 
 ## Train
 
@@ -218,7 +245,17 @@ Units: the table's model score is a number from 0 to 1 (not calibrated); SHAP va
 .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools                     # f9p (default)
 .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --feature-set f9    # original nine
 .\.venv\Scripts\python DDoSDetector\train\train_model.py --mode hoic_held_out
+.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --model random_forest
+.\.venv\Scripts\python DDoSDetector\train\train_model.py --mode all_tools --model linear_svm
 ```
+
+`--model` picks the model type (default `xgboost`); the settings of every type are in
+`DDoSDetector\app\core\models.py`, shared with the app. Random Forest: 100 trees, depth 12, at least 20
+flows per leaf, balanced class weights (shallower than the update-4 experiment's forest, so SHAP stays
+fast: 0.9 s for 500 flows instead of 4.0 s, same recall to three decimals). Linear SVM: inputs
+log-scaled (`sign(x)·log(1+|x|)`) and standardised, `C=1`, balanced class weights. Names get `_rf` or
+`_svm` (`all_tools_f9p_rf`, `hoic_held_out_f9p_svm`, …). Every type gets exactly the same splits for a
+given seed, so their test numbers are comparable.
 
 `--feature-set f9p` (default) names the output `<setup>_f9p` (`f21` → `<setup>_f21`, `f15` →
 `<setup>_f15`, `f14` → `<setup>_f14`); `f9` keeps the original names (`all_tools`, `hoic_held_out`, …).
@@ -234,7 +271,7 @@ Each run takes about a minute (reading the 3.9 GB file is most of it) and writes
 
 | File | Contents |
 |---|---|
-| `<name>.json` | XGBoost model |
+| `<name>.json` or `<name>.joblib` | the model: XGBoost's own JSON format, or joblib for Random Forest and the linear SVM (joblib is a pickle: only open model files you made) |
 | `<name>.meta.json` | `feature_columns` (in order), `feature_groups`, `feature_set`, label mapping, split, seed, row counts, hyperparameters, this model's own test metrics, timing, library versions |
 | `<name>.background.parquet` | 1,000 training rows (250 per tool) as a SHAP reference sample |
 
@@ -266,6 +303,29 @@ Models in `DDoSDetector\models\` now (each model's own test split, threshold 0.5
 | `hoic_held_out_f9p` / `_by_file_f9p` / `_attack_period_f9p` | HOIC 0.397 / 0.369 / 0.362 | 0.0020 (4,514) / 0.0000 (0) / 0.0000 (0) |
 | `loic_http_held_out_f9p` / `_attack_period_f9p` | LOIC-HTTP 0.002 / 0.003 | 0.0005 (1,218) / 0.0045 (25,701) |
 | `loic_udp_held_out_f9p` / `_attack_period_f9p` | LOIC-UDP 0.994 / 0.994 (1,730 flows) | 0.0023 (5,238) / 0.0000 (0) |
+
+The comparison models (trained 4 Nov 2026, same splits and columns; names end in `_rf` / `_svm`):
+
+| Model | Random Forest | Linear SVM |
+|---|---|---|
+| `all_tools_f9p_*` (seeds 0–4): recall HOIC / LOIC-HTTP / LOIC-UDP | 0.9997–0.9998 / 0.9998–0.9999 / 1.000 | 0.997 / 0.998–0.999 / 0.898–0.929 |
+| `all_tools_f9p_*`: FPR (false alarms of 300,000 benign) | 0.0003–0.0004 (87–114) | 0.0044–0.0046 (1,325–1,366) |
+| `hoic_held_out_f9p_*` / `_by_file_` / `_attack_period_`: HOIC | 0.393 / 0.374 / 0.377 | 0.799 / 0.622 / 0.627 |
+| `hoic_held_out_f9p_*` (per day): FPR (false alarms) | 0.0049 (11,120) | 0.0081 (18,411) |
+| `loic_http_held_out_f9p_*` / `_attack_period_`: LOIC-HTTP | 0.003 / 0.014 | 0.026 / 0.013 |
+| `loic_udp_held_out_f9p_*` / `_attack_period_`: LOIC-UDP | 0.999 / 1.000 | 0.000 / 0.000 |
+| Training time, all tools (1.6 million flows) | 46–53 s (XGBoost 9–10 s) | 4–5 s |
+| SHAP per flow (batches of 2,000) | 2.2 ms (XGBoost 0.15 ms) | 0.005 ms |
+
+How to read it: on tools seen in training XGBoost and Random Forest are equally good and the linear SVM
+is clearly worse (misses 7–10% of LOIC-UDP, about 13 times the false alarms). On unseen tools no model
+transfers reliably: the SVM catches more unseen HOIC but with more false alarms, misses unseen LOIC-UDP
+completely, and no model catches unseen LOIC-HTTP. On the HOIC flows the SVM catches and XGBoost misses,
+both see the high port count as attack-like; the inter-arrival time pushes XGBoost strongly towards
+benign (−10.2 log-odds on average) while the SVM gives it little weight. All three rank feature 7 first
+by mean |SHAP|. XGBoost stays the main model. Random Forest SHAP is slow, so with a forest the Seed
+stability and Model stability charts and the alert export take seconds to tens of seconds (a worker
+thread; the window stays usable).
 
 How to read it: the **all-tools** numbers are not trustworthy with feature 7, because training and test
 flows share the same seconds of the same attack. The held-out rows are the honest test: unseen HOIC is
@@ -352,7 +412,9 @@ thread; `render()` runs on the UI thread and must draw onto the given `figure` (
 ## Add a model
 
 Train it with `train_model.py` (or any script that calls `app.core.model_store.save_bundle`
-with a `features` list in the metadata) and put the files in `DDoSDetector\models\`. It appears in
+with a `features` list in the metadata) and put the files in `DDoSDetector\models\`. A new model type
+needs an entry in `app\core\models.py` (settings, save/load, `model_type_of`) and, if SHAP needs
+something other than TreeExplainer, a case in `app\core\explain.py`. It appears in
 the Model menu, or use *Open model…* for a `.meta.json` elsewhere. The feature list is checked
 before scoring.
 
@@ -385,8 +447,15 @@ update 4: `f9p` as the default set and app default, feature 7 against a hand-wor
 back only, same second not counted, per capture file, row order irrelevant, text and parsed times
 equal, unreadable time or port → Not scored), the port staying text through the CSV reader, the
 missing-column check naming `Timestamp`/`Dst Port`, the model card and Features panel wording, and
-every model in `DDoSDetector\models\` using `f9p`. Tests use synthetic data, not the CSVs (the last
-check reads the trained models' metadata).
+every model in `DDoSDetector\models\` using `f9p`; and for bulk labelling: verdicts on several
+selected rows, the confirmation above 100 rows (and nothing changing when it is declined), *All shown
+rows* following the filters, the right-click menu, and bulk labels reaching the feedback export; and
+for the three model types: a 0–1 score from each, the SVM's score = sigmoid(decision value), save and
+load keeping the type and the scores, a file of the wrong type refused, SHAP additivity per type
+(`base + sum(SHAP) = f(x)` and the score following from it), the SVM's SHAP = weight × standardised
+input, the SVM not scoring rows with missing values, training each type with `--model`, the output
+names, the model card and every chart for each type, and the two Model types charts.
+Tests use synthetic data, not the CSVs (the f9p check reads the trained models' metadata).
 
 ## Package
 

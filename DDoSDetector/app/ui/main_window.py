@@ -17,7 +17,9 @@ from app.core.csv_reader import MissingColumnsError, read_flows, read_header
 from app.core.explain import ExplainerCache, contributions, top_features
 from app.core.features import (LABEL, TIME, TRACING_COLUMNS, extra_missing_mask, missing_columns, summary,
                                tools_from_labels)
-from app.core.model_store import ModelBundle, list_models, load_bundle, model_columns, read_meta, read_metas
+from app.core.model_store import (ModelBundle, list_models, load_bundle, model_columns, model_type_from, read_meta,
+                                  read_metas)
+from app.core.models import ACCEPTS_MISSING, MODEL_TYPES, XGBOOST
 from app.core.scoring import (CODE_BENIGN, CODE_DDOS, CODE_NOT_SCORED, FLAG_NAMES, build_all, label_metrics,
                               score)
 from app.plots.feature_set_comparison import FILE_KIND
@@ -32,6 +34,7 @@ from app.workers import Jobs
 
 log = logging.getLogger(__name__)
 DEFAULT_MODELS = ("all_tools_f9p",)   # first one found is loaded at start-up (update 4)
+BULK_CONFIRM = 100   # marking more selected rows than this at once asks first
 VERDICT_SHORTCUTS = {rv.CONFIRMED: "Ctrl+1", rv.FALSE_POSITIVE: "Ctrl+2", rv.UNSURE: "Ctrl+3",
                      rv.UNREVIEWED: "Ctrl+0"}
 
@@ -68,7 +71,8 @@ class MainWindow(QMainWindow):
         self.table.horizontalHeader().setSortIndicatorShown(True)
         self.table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        # Shift/Ctrl-click select several rows; verdicts apply to every selected row.
+        self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.verticalHeader().setVisible(False)
         self.table.verticalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         self.table.verticalHeader().setDefaultSectionSize(22)
@@ -241,13 +245,27 @@ class MainWindow(QMainWindow):
         paths = list_models(self.models_dir)
         if self.bundle and self.bundle.meta_path and self.bundle.meta_path not in paths:
             paths.append(self.bundle.meta_path)   # opened from elsewhere
-        for p in paths:
-            a = QAction(p.name.removesuffix(".meta.json"), self, checkable=True)
-            a.setData(str(p))
-            a.setChecked(self.bundle is not None and self.bundle.meta_path == p)
-            a.triggered.connect(lambda _=False, p=p: self.set_model(p))
-            self.model_group.addAction(a)
-            self.model_menu.addAction(a)
+        kinds = {}
+        for p in paths:                 # group the menu by model type, XGBoost first
+            try:
+                kinds[p] = model_type_from(read_meta(p))
+            except (OSError, ValueError):
+                kinds[p] = XGBOOST
+        for kind, kind_name in MODEL_TYPES.items():
+            mine = [p for p in paths if kinds[p] == kind]
+            if not mine:
+                continue
+            if len(set(kinds.values())) > 1:
+                header = QAction(kind_name, self)
+                header.setEnabled(False)
+                self.model_menu.addAction(header)
+            for p in mine:
+                a = QAction(p.name.removesuffix(".meta.json"), self, checkable=True)
+                a.setData(str(p))
+                a.setChecked(self.bundle is not None and self.bundle.meta_path == p)
+                a.triggered.connect(lambda _=False, p=p: self.set_model(p))
+                self.model_group.addAction(a)
+                self.model_menu.addAction(a)
         if not paths:
             a = QAction("(no models found: run train/train_model.py)", self)
             a.setEnabled(False)
@@ -283,10 +301,12 @@ class MainWindow(QMainWindow):
             self._rebuild_model_menu()
             return
         self.bundle = bundle
-        self.model_label.setText(f"Model: {bundle.name}, {summary(bundle.features)} [{bundle.version}]")
+        self.model_label.setText(f"Model: {bundle.model_type_name} {bundle.name}, {summary(bundle.features)} "
+                                 f"[{bundle.version}]")
         self.model_label.setToolTip(bundle.title)
         self._rebuild_model_menu()
-        log.info("model %s (version %s, %s) loaded", bundle.name, bundle.version, summary(bundle.features))
+        log.info("model %s (%s, version %s, %s) loaded", bundle.name, bundle.model_type_name, bundle.version,
+                 summary(bundle.features))
         if rescore and self.clean_df is not None:
             self._start_scoring(self.clean_df, self.results.source if self.results else "")
 
@@ -538,8 +558,10 @@ class MainWindow(QMainWindow):
         codes = self.table_model.codes
         n, n_ddos, n_ns = len(codes), int((codes == CODE_DDOS).sum()), int((codes == CODE_NOT_SCORED).sum())
         n_rev = int((r.review.verdicts != rv.UNREVIEWED).sum())
-        parts = [f"<b>{n:,}</b> flows", f"<b>{n_ddos:,}</b> flagged DDoS", f"<b>{n_ns:,}</b> not scored (invalid values)"]
-        if self._n_extra_missing:   # allowed: XGBoost handles missing values in features 8-15
+        why = ("invalid values" if self.bundle is None or ACCEPTS_MISSING[self.bundle.model_type]
+               else "invalid or missing values")       # the linear SVM cannot use missing values
+        parts = [f"<b>{n:,}</b> flows", f"<b>{n_ddos:,}</b> flagged DDoS", f"<b>{n_ns:,}</b> not scored ({why})"]
+        if self._n_extra_missing:   # allowed for the tree models: they handle missing values in features 8-15
             parts.append(f"<b>{self._n_extra_missing:,}</b> flows have missing values in features 8 to 15")
         parts += [f"<b>{n_rev:,}</b> reviewed", f"showing {self.table_model.rowCount():,}"]
         text = " · ".join(parts)
@@ -563,23 +585,65 @@ class MainWindow(QMainWindow):
             return None
         return self.table_model.position(idx.row())
 
+    def _selected_positions(self) -> np.ndarray:
+        """Row positions of every selected row (Shift/Ctrl ranges), in view order."""
+        if self.results is None:
+            return np.zeros(0, dtype=np.int64)
+        ranges = [np.arange(r.top(), r.bottom() + 1) for r in self.table.selectionModel().selection()]
+        if not ranges:
+            pos = self._selected_position()
+            return np.array([] if pos is None else [pos], dtype=np.int64)
+        return self.table_model.positions(np.unique(np.concatenate(ranges)))
+
+    def _confirm_bulk(self, n: int, verdict: str, which: str) -> bool:
+        answer = QMessageBox.question(self, "Mark many flows",
+                                      f"Mark {n:,} {which} flows as “{verdict}”?\n\n"
+                                      "Existing verdicts on these flows are replaced.")
+        return answer == QMessageBox.StandardButton.Yes
+
     def _table_menu(self, point):
         idx = self.table.indexAt(point)
         if self.results is None or not idx.isValid():
             return
-        self.table.selectRow(idx.row())
+        if not self.table.selectionModel().isRowSelected(idx.row()):
+            self.table.selectRow(idx.row())        # keep a multi-row selection the click falls inside
+        self._build_table_menu().exec(self.table.viewport().mapToGlobal(point))
+
+    def _build_table_menu(self) -> QMenu:
+        n_sel, n_shown = len(self._selected_positions()), self.table_model.rowCount()
         menu = QMenu(self)
+        if n_sel > 1:
+            menu.addAction(f"{n_sel:,} rows selected").setEnabled(False)
         for a in self.verdict_actions.values():
             menu.addAction(a)
+        shown = menu.addMenu(f"All {n_shown:,} shown rows")
+        for code in self.verdict_actions:
+            shown.addAction(f"Verdict: {rv.VERDICTS[code]}").triggered.connect(
+                lambda _=False, c=code: self.set_verdict_shown(c))
         menu.addSeparator()
         menu.addAction(self.note_action)
-        menu.exec(self.table.viewport().mapToGlobal(point))
+        return menu
 
     def set_verdict_selected(self, code: int):
-        pos = self._selected_position()
-        if pos is None:
+        pos = self._selected_positions()
+        if len(pos) == 0:
             return
-        self.table_model.set_review(pos, verdict=code)
+        if len(pos) == 1:
+            self.table_model.set_review(int(pos[0]), verdict=code)
+        else:
+            if len(pos) > BULK_CONFIRM and not self._confirm_bulk(len(pos), rv.VERDICTS[code], "selected"):
+                return
+            self.table_model.set_review_many(pos, code)
+            log.info("verdict '%s' set on %d selected flows", rv.VERDICTS[code], len(pos))
+        self._update_summary()
+
+    def set_verdict_shown(self, code: int):
+        """One verdict for every row the current filters show (e.g. a whole incident)."""
+        pos = self.table_model.shown_positions()
+        if len(pos) == 0 or not self._confirm_bulk(len(pos), rv.VERDICTS[code], "shown"):
+            return
+        self.table_model.set_review_many(pos, code)
+        log.info("verdict '%s' set on %d shown flows", rv.VERDICTS[code], len(pos))
         self._update_summary()
 
     def edit_note_selected(self):

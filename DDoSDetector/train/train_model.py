@@ -1,4 +1,4 @@
-r"""Train the XGBoost DDoS detector and write model, metadata and SHAP background sample.
+r"""Train a DDoS detector and write model, metadata and SHAP background sample.
 
     python -m train.train_model --mode all_tools          (run from the DDoSDetector folder)
     python -m train.train_model --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP
@@ -7,7 +7,9 @@ r"""Train the XGBoost DDoS detector and write model, metadata and SHAP backgroun
     python -m train.train_model --mode all_tools --seeds 0 1 2 3 4        (seed stability)
     python -m train.train_model --mode all_tools --extra-labelled feedback.csv   (retrain)
     python -m train.train_model --mode all_tools --feature-set f9     (the original nine columns)
-Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f9p.
+    python -m train.train_model --mode all_tools --model random_forest    (comparison models:
+    python -m train.train_model --mode all_tools --model linear_svm        random_forest, linear_svm)
+Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f9p, --model xgboost.
 
 Follows ddos_xgboost_starter_v2.ipynb:
   all_tools  = section 10 baseline (random 70/30 split stratified by tool; optimistic)
@@ -18,8 +20,9 @@ Follows ddos_xgboost_starter_v2.ipynb:
 Feature sets come from the registry in app/core/features.py: f9p = features 1-4, 6 and 7 (SYN
 replaced by the port window; the default since update 4), f9 = the original nine columns, f15 =
 fifteen (features 1-6 and 8-11), f14 = f15 without SYN, f21 = f14 + features 12-15 (update 3).
-Outputs are named <setup>_<set> (all_tools_f9p, ...); f9 keeps the original names (all_tools,
-hoic_held_out, ...). Feature 7 is built per file on every row read, before the cleaning below,
+Outputs are named <setup>_<set>[_rf|_svm] (all_tools_f9p, all_tools_f9p_rf, all_tools_f9p_svm, ...);
+f9 keeps the original names (all_tools, hoic_held_out, ...). Model settings live in app/core/models.py,
+shared with the app; every model type gets the same splits, so their test numbers are comparable. Feature 7 is built per file on every row read, before the cleaning below,
 because the app builds it on every row of the file it opens.
 """
 from __future__ import annotations
@@ -35,7 +38,6 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -46,6 +48,8 @@ from app.core.features import (  # noqa: E402
     columns_for, groups_for, parse_timestamps, summary, tools_from_labels,
 )
 from app.core.model_store import save_bundle  # noqa: E402
+from app.core.models import (ACCEPTS_MISSING, MODEL_TYPES, NAME_SUFFIX, XGBOOST, make_model,  # noqa: E402
+                             xgboost_params)
 from app.core.timing import Stopwatch  # noqa: E402
 from app.paths import DATA_DIR, MODELS_DIR  # noqa: E402
 
@@ -66,9 +70,10 @@ def slug(tool: str) -> str:
     return tool.lower().replace("-", "_")
 
 
-def setup_name(mode: str, held_out: str | None, split: str, feature_set: str = "f9") -> str:
-    """Output name: all_tools, hoic_held_out_f15, loic_http_held_out_attack_period, ..."""
-    suffix = "" if feature_set == "f9" else f"_{feature_set}"
+def setup_name(mode: str, held_out: str | None, split: str, feature_set: str = "f9",
+               model_type: str = XGBOOST) -> str:
+    """Output name: all_tools, hoic_held_out_f15, loic_http_held_out_attack_period, all_tools_f9p_rf, ..."""
+    suffix = ("" if feature_set == "f9" else f"_{feature_set}") + NAME_SUFFIX[model_type]
     if mode == "all_tools":
         return "all_tools" + suffix
     return f"{slug(held_out)}_held_out" + ("" if split == "per_day" else f"_{split}") + suffix
@@ -82,8 +87,8 @@ def setup_title(mode: str, held_out: str | None, split: str) -> str:
 
 
 def hyperparams(spw: float, seed: int) -> dict:
-    return dict(n_estimators=300, max_depth=6, learning_rate=0.1, tree_method="hist",
-                scale_pos_weight=float(spw), n_jobs=-1, random_state=seed)
+    """XGBoost settings (kept for older scripts; models.py holds the settings of every model type)."""
+    return xgboost_params(spw, seed)
 
 
 def load(data_dir: Path, nrows: int | None) -> pd.DataFrame:
@@ -244,12 +249,16 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
         tr = pd.concat([tr, extra], ignore_index=True)
     if tr["y"].nunique() < 2:
         raise SystemExit("Training data has only one class; use more rows.")
+    if not ACCEPTS_MISSING[a.model] and tr[cols].isna().any().any():
+        raise SystemExit(f"{MODEL_TYPES[a.model]} cannot use rows with missing values (features 8-15 of this "
+                         f"feature set); use --feature-set f9p or f9.")
     spw = (tr["y"] == 0).sum() / (tr["y"] == 1).sum()
-    params = hyperparams(spw, seed)
-    print(f"Training {base}, seed {seed}: {(tr.y == 0).sum():,} benign, {(tr.y == 1).sum():,} attack, "
-          f"scale_pos_weight={spw:.2f}")
+    model, params = make_model(a.model, spw, seed)
+    weights = f"scale_pos_weight={spw:.2f}" if a.model == XGBOOST else "class weights balanced"
+    print(f"Training {base} ({MODEL_TYPES[a.model]}), seed {seed}: {(tr.y == 0).sum():,} benign, "
+          f"{(tr.y == 1).sum():,} attack, {weights}")
     with Stopwatch() as train_sw:
-        model = XGBClassifier(**params).fit(tr[cols], tr["y"])
+        model.fit(tr[cols], tr["y"])
     print(f"  trained in {train_sw.seconds:.1f}s")
 
     with Stopwatch() as pred_sw:
@@ -259,7 +268,8 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
     name = base if seed == 0 else f"{base}_seed{seed}"
     split = "random" if a.mode == "all_tools" else a.benign_split
     meta = {
-        "title": setup_title(a.mode, held_out, split) + f", {summary(cols)}"
+        "title": ("" if a.model == XGBOOST else f"{MODEL_TYPES[a.model]}: ")
+                 + setup_title(a.mode, held_out, split) + f", {summary(cols)}"
                  + (" + analyst feedback" if extra is not None else "") + ("" if seed == 0 else f", seed {seed}"),
         "feature_columns": cols,      # exactly these, in this order (the app builds them from the registry)
         "feature_groups": [{"number": g.number, "key": g.key, "title": g.title,
@@ -269,6 +279,7 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
         "positive_class": "DDoS (any tool) = 1, Benign = 0",
         "mode": a.mode,
         "setup": base,          # models sharing a setup are seed variants (seed stability chart)
+        "model_type": a.model,  # also set by save_bundle from the model object
         "held_out_tool": held_out,
         "benign_split_mode": split,
         "benign_split": "random 70/30 stratified by tool" if a.mode == "all_tools" else BENIGN_SPLITS[split],
@@ -305,6 +316,9 @@ def main(argv=None) -> int:
     ap.add_argument("--feature-set", choices=list(FEATURE_SETS), default=DEFAULT_FEATURE_SET,
                     help="f9p = SYN replaced by the port window (default, update 4); f9 = the original "
                          "nine; f21 = 21 columns, update 3; f15 = fifteen; f14 = f15 without SYN")
+    ap.add_argument("--model", choices=list(MODEL_TYPES), default=XGBOOST,
+                    help="xgboost (main model, default), random_forest or linear_svm (the group's comparison "
+                         "models); settings in app/core/models.py")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seeds", type=int, nargs="+",
                     help="train one model per seed (data loaded once), e.g. --seeds 0 1 2 3 4")
@@ -334,7 +348,7 @@ def main(argv=None) -> int:
     extra = load_extra_labelled(a.extra_labelled, cols) if a.extra_labelled else None
 
     for held in (a.held_out if a.mode == "held_out" else [None]):
-        base = a.name or (setup_name(a.mode, held, a.benign_split, a.feature_set)
+        base = a.name or (setup_name(a.mode, held, a.benign_split, a.feature_set, a.model)
                           + ("_feedback" if extra is not None else ""))
         for seed in (a.seeds or [a.seed]):
             train_one(df, a, seed, extra, base, held, cols)

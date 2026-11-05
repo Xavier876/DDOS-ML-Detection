@@ -1,0 +1,178 @@
+{
+  "title": "Random Forest: LOIC-UDP held out (trained on HOIC + LOIC-HTTP + benign; attack-period benign split), 6 feature groups (9 columns)",
+  "feature_columns": [
+    "Flow Pkts/s",
+    "Flow Byts/s",
+    "Flow Duration",
+    "Flow IAT Mean",
+    "Flow IAT Std",
+    "Fwd Pkt Len Mean",
+    "Fwd Pkt Len Std",
+    "fwd_bwd_ratio",
+    "dst_port_flows_10s"
+  ],
+  "feature_groups": [
+    {
+      "number": 1,
+      "key": "rate",
+      "title": "Packet and byte rate",
+      "columns": [
+        "Flow Pkts/s",
+        "Flow Byts/s"
+      ]
+    },
+    {
+      "number": 2,
+      "key": "duration",
+      "title": "Flow duration",
+      "columns": [
+        "Flow Duration"
+      ]
+    },
+    {
+      "number": 3,
+      "key": "fwd_bwd_ratio",
+      "title": "Forward to backward packet ratio",
+      "columns": [
+        "fwd_bwd_ratio"
+      ]
+    },
+    {
+      "number": 4,
+      "key": "inter_arrival",
+      "title": "Inter-arrival time",
+      "columns": [
+        "Flow IAT Mean",
+        "Flow IAT Std"
+      ]
+    },
+    {
+      "number": 6,
+      "key": "fwd_pkt_len",
+      "title": "Forward packet length",
+      "columns": [
+        "Fwd Pkt Len Mean",
+        "Fwd Pkt Len Std"
+      ]
+    },
+    {
+      "number": 7,
+      "key": "port_window",
+      "title": "Flows to the same destination port",
+      "columns": [
+        "dst_port_flows_10s"
+      ]
+    }
+  ],
+  "feature_set": "f9p",
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "held_out",
+  "setup": "loic_udp_held_out_attack_period_f9p_rf",
+  "model_type": "random_forest",
+  "held_out_tool": "LOIC-UDP",
+  "benign_split_mode": "attack_period",
+  "benign_split": "attack_period: benign inside the held-out tool's attack window test, all other benign train",
+  "attack_window": [
+    "2018-02-21 10:08:51",
+    "2018-02-21 10:43:16"
+  ],
+  "timing": {
+    "train_seconds": 57.52,
+    "train_rows": 2244635,
+    "predict_seconds": 0.036,
+    "predict_rows": 3408,
+    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
+  },
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_TrafficForML_CICFlowMeter.csv",
+    "Wednesday-21-02-2018_TrafficForML_CICFlowMeter.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "rows_after_cleaning": {
+    "Benign": 7542570,
+    "HOIC": 668461,
+    "LOIC-HTTP": 576174,
+    "LOIC-UDP": 1730
+  },
+  "train_rows": {
+    "Benign": 1000000,
+    "HOIC": 668461,
+    "LOIC-HTTP": 576174
+  },
+  "test_rows": {
+    "LOIC-UDP": 1730,
+    "Benign": 1678
+  },
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 12,
+    "min_samples_leaf": 20,
+    "class_weight": "balanced",
+    "n_jobs": -1,
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 1678,
+    "n_test_attack": 1730,
+    "recall": {
+      "LOIC-UDP": 1.0
+    },
+    "n_test": {
+      "LOIC-UDP": 1730
+    },
+    "fpr": 0.0,
+    "false_alarms": 0,
+    "pr_auc": 1.0,
+    "roc_auc": 1.0,
+    "base_rate": 0.5076,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 1.0,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.2,
+        "recall": 1.0,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.1,
+        "recall": 1.0,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.05,
+        "recall": 1.0,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.01,
+        "recall": 1.0,
+        "fpr": 0.0632
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-11-05T03:12:30+00:00",
+  "background_file": "loic_udp_held_out_attack_period_f9p_rf.background.parquet",
+  "model_file": "loic_udp_held_out_attack_period_f9p_rf.joblib",
+  "version": "8cc5081cdc"
+}

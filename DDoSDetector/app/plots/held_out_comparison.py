@@ -6,7 +6,8 @@ depend on the loaded CSV.
 import numpy as np
 
 from app.core.features import ATTACK_TOOLS, feature_set_of, summary
-from app.core.model_store import held_out_results, model_columns
+from app.core.model_store import held_out_results, model_columns, model_type_from
+from app.core.models import MODEL_TYPES, NAME_SUFFIX
 
 from . import _style as S
 from .base import ChartPlugin, message, register

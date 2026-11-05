@@ -1,11 +1,11 @@
 """Per-flow SHAP waterfall: how each feature moves this flow's score from the base value.
 
 Drawn natively with matplotlib (not shap.plots.waterfall) so it renders into the
-widget's own Figure and can label log-odds and the model score side by side.
+widget's own Figure and can label the model's own units (log-odds for XGBoost, the model score for
+Random Forest, the SVM decision value for the linear SVM) and the model score side by side.
 """
 import numpy as np
 
-from app.core.explain import sigmoid
 from app.core.features import column_label
 from app.core.numbers import readable
 
@@ -63,13 +63,18 @@ class ShapWaterfall(ChartPlugin):
         pad = 0.18 * (hi - lo or 1)
         ax.set_xlim(lo - pad, hi + pad)
         ax.set_ylim(-0.6, len(order) - 0.1)
-        ax.set_xlabel("model output in log-odds (SHAP units)")
+        unit = ctx.unit
+        ax.set_xlabel(f"model output: {unit} (SHAP units)")
 
         row_no = f"Row {ctx.row_numbers[ctx.selected]}. " if ctx.row_numbers is not None else ""
         flag = "DDoS" if ctx.scores[ctx.selected] >= ctx.threshold else "Benign"
+        score, base_score = float(ctx.score_of(fx)), float(ctx.score_of(base))
+        if unit == "model score":   # Random Forest: SHAP values add up to the score itself
+            how = f"Base value {base:.3f} + sum of SHAP values {vals.sum():+.3f} = model score {fx:.4f}."
+        else:
+            how = (f"Base value {base:.3f} {unit} (score {base_score:.3f}) + sum of SHAP values "
+                   f"{vals.sum():+.3f} = f(x) {fx:.3f} {unit}; model score = sigmoid(f(x)) = {score:.4f}.")
         S.title(figure, ax,
-                f"Why this flow scored {sigmoid(fx):.4f}: {flag} at threshold {ctx.threshold:.2f}",
-                f"{row_no}Base value {base:.3f} log-odds (score {sigmoid(base):.3f}) + sum of SHAP "
-                f"values {vals.sum():+.3f} = f(x) {fx:.3f} log-odds; model score = sigmoid(f(x)) = "
-                f"{sigmoid(fx):.4f}. Red pushes towards DDoS, blue towards Benign.")
+                f"Why this flow scored {score:.4f}: {flag} at threshold {ctx.threshold:.2f}",
+                f"{row_no}{how} Red pushes towards DDoS, blue towards Benign.")
         S.finish(figure, top=0.82)

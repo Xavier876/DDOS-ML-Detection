@@ -81,7 +81,7 @@ class ShapBeeswarm(ChartPlugin):
         ax.axvline(0, color=S.THEME["axis"], linewidth=1)
         ax.set_yticks(range(len(order)))
         ax.set_yticklabels(names[order], fontsize=8)
-        ax.set_xlabel("SHAP value (impact on log-odds; > 0 pushes towards DDoS)")
+        ax.set_xlabel(f"SHAP value (impact on the {ctx.unit}; > 0 pushes towards DDoS)")
         if X is not None:
             cb = figure.colorbar(ScalarMappable(norm=norm, cmap=S.FEATURE_CMAP), ax=ax, pad=0.01,
                                  aspect=40, ticks=[0, 1])

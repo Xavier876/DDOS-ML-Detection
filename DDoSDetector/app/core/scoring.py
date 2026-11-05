@@ -6,6 +6,7 @@ import pandas as pd
 
 from .features import ATTACK_TOOLS, build_features, buildable_columns, valid_mask
 from .model_store import ModelBundle, check_features
+from .models import ACCEPTS_MISSING
 
 BENIGN, DDOS, NOT_SCORED = "Benign", "DDoS", "Not scored"
 FLAG_NAMES = np.array([BENIGN, DDOS, NOT_SCORED])
@@ -23,13 +24,16 @@ def score(bundle: ModelBundle, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarr
 
     Returns (X, scores): X holds the model inputs for every row and scores is the model score
     (0..1), NaN for rows that could not be scored (NaN/inf in a core column). Missing values in
-    features 8-15 are allowed. No row is dropped.
+    features 8-15 are allowed for the tree models; the linear SVM cannot score such rows, so they are
+    "Not scored" for it. No row is dropped.
     """
     missing = check_features(bundle.meta, buildable_columns(df.columns))
     if missing:
         raise ValueError("Model expects features that cannot be built from this CSV: " + ", ".join(missing))
     X = build_features(df, bundle.features)
     ok = valid_mask(X)
+    if not ACCEPTS_MISSING[bundle.model_type]:
+        ok &= np.isfinite(X.to_numpy(dtype="float64")).all(axis=1)
     scores = np.full(len(X), np.nan)
     if ok.any():
         scores[ok] = bundle.model.predict_proba(X[ok])[:, 1]

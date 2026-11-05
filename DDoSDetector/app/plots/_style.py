@@ -17,6 +17,8 @@ SERIES = "#2a78d6"
 
 # Fixed tool -> colour (colour follows the entity, never its rank).
 TOOL_COLORS = {"Benign": "#898781", "HOIC": "#2a78d6", "LOIC-HTTP": "#eb6834", "LOIC-UDP": "#1baf7a"}
+# Fixed model type -> colour (Model types charts).
+MODEL_TYPE_COLORS = {"xgboost": "#2a78d6", "random_forest": "#1baf7a", "linear_svm": "#eda100"}
 
 FEATURE_CMAP = LinearSegmentedColormap.from_list("low_high", ["#2a78d6", "#d6d5cf", "#e34948"])
 SEQ_CMAP = LinearSegmentedColormap.from_list("seq_blue", ["#f4f8fd", "#86b6ef", "#2a78d6"])

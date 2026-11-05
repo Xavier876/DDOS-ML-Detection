@@ -5,7 +5,8 @@ Guidance for Claude Code in this repository.
 ## What this is
 
 COMP6310 group project: *Explainable Machine Learning for DDoS Attack Detection in Network Traffic*.
-A PySide6 desktop app scores CICFlowMeter flows (CSE-CIC-IDS2018, 20–21 Feb 2018) with XGBoost,
+A PySide6 desktop app scores CICFlowMeter flows (CSE-CIC-IDS2018, 20–21 Feb 2018) with XGBoost (main
+model; Random Forest and a linear SVM are the comparison models, user's request of 4 Nov 2026),
 explains them with SHAP, and supports an analyst review/feedback loop. It is a university demo and
 evidence for the report, **not a production IDS**. Correctness and honesty about the model's limits
 matter more than polish.
@@ -23,13 +24,25 @@ handoff disagree, the notebook wins and the user is told). The group's Week 3 fe
 copy with Weeks 3 and 4 updated for update 3: `docs/Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx`,
 and on 4 Nov 2026 one with Weeks 3–4 updated for update 4 plus a new Week 5 (deployment pipeline):
 `docs/Weeks_1_to_5_-_DDoS_Detection_Project_UPDATE4.docx` (built from the UPDATE3 copy by exact-match XML
-edits; update-4 changes are marked "Update 4" next to the earlier text). Week 5 follows the group's
-decisions of 4 Nov 2026: offline static data (live capture/SIEM only as future work), alerts = flag at a
-threshold chosen after testing (proposal: keep 0.5), XGBoost with Random Forest as the one comparison
-model, retraining shown by a demonstration. Its evidence is `notebooks/ddos_week5_threshold_retraining.ipynb`.
+edits; update-4 changes are marked "Update 4" next to the earlier text). Week 5 answers the seven pipeline
+questions for a **live deployment** (the user said on 4 Nov 2026 that the group's offline assumption was
+wrong): taps/mirror ports feed sensors (CICFlowMeter live, features.py, XGBoost, SHAP) outside the firewall,
+in the DMZ, in the core and in the cloud; alerts go to a SIEM in the SOC; feedback and retraining happen in
+the SOC; people approve every response. It is a design, not built: the prototype on recorded files is the
+evidence. Group decisions kept: alerts = flag at a threshold chosen after testing (proposal: 0.5),
+retraining shown by a demonstration. Its evidence is `notebooks/ddos_week5_threshold_retraining.ipynb`.
+On 4 Nov 2026 the user also asked for a pass against the grading guide (PDF in the user's OneDrive, `...\Assignments\MACHINE LEARNING FOR CYBERSECURITY - Group Project Assessment  Grading Guide.pdf`): Weeks 1–4 got
+"Update (4 November 2026)" notes (near-real-time deployment, live data source, what was actually run: no CV,
+class weights; a security evaluation with confusion matrices from metadata), and Week 3 got a new Section 7,
+the final feature choice in the guide's table format: **keep the six groups**; a 7th/8th group (F13, F10, F9,
+alone and in pairs) was tested on the same splits (`DDoSDetector/scripts/feature_choice_experiment.py`, results
+`docs/feature_choice_6_vs_8_groups_2026-11-04.csv`): nothing passed the group's rule; F13 raised unseen
+LOIC-HTTP to 0.017–0.031 only with more false alarms ("mixed"). The docx build scripts live in the session
+scratchpad (`w5/build_weeks5.py` + `rubric_update.py`, `week3_choice.py`, `week5_live.py`, `three_models.py`).
 `docs/COMP6310_Project_Handoff.md` is the project-level summary from another chat (testing plan,
 papers, user preferences); it predates the app, so where it conflicts with the update (e.g. it says
-"confidence score") the update wins. The latest session summary is `docs/HANDOFF_SESSION_1.md`.
+"confidence score") the update wins. The latest session summary is `docs/HANDOFF_SESSION_2.md`
+(it continues `docs/HANDOFF_SESSION_1.md`).
 
 The user (Xavier) wants plain, easy-to-explain language, step-by-step Windows instructions, and
 honest flags on anything unverified.
@@ -40,9 +53,9 @@ Python is the project venv `.venv` (Python 3.14; the only interpreter on this ma
 `.\.venv\Scripts\python.exe`, never a bare `python`.
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 89 pass + 2 skipped, ~20 s, synthetic data
+.\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 122 pass + 2 skipped, ~30 s, synthetic data
 .\.venv\Scripts\python.exe DDoSDetector\app\main.py [data\x.csv]   # run the app
-.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4] [--feature-set f9p|f9|f15|f14|f21]   # default f9p
+.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4] [--feature-set f9p|f9|f15|f14|f21] [--model xgboost|random_forest|linear_svm]   # defaults f9p, xgboost
 .\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP [--benign-split by_file|attack_period]
 .\.venv\Scripts\python.exe DDoSDetector\scripts\make_sample.py --seconds 40      # time-slice test CSVs in data\
 powershell -ExecutionPolicy Bypass -File DDoSDetector\build_exe.ps1             # PyInstaller -> bin\Release
@@ -61,12 +74,13 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   app/paths.py                      all folder locations (data, models, logs, app/data) — use it, no cwd paths
   app/core/                         Qt-free logic, unit-tested:
     features.py                     THE feature registry (groups 1-15; f9p/f9/f15/f14/f21 sets) + cleaning
-    csv_reader.py, scoring.py, model_store.py, explain.py (TreeExplainer cache, pred_contribs),
+    models.py                       the 3 model types: settings, save/load (XGBoost JSON; RF/SVM joblib)
+    csv_reader.py, scoring.py, model_store.py, explain.py (SHAP per model type, units, cache),
     impact.py, review.py, feature_notes.py, timing.py
   app/plots/                        one file per chart plugin (auto-discovered); base.py = interface
   app/ui/                           main_window, results_table (virtual model), plot_panel, dialogs
   app/data/                         feature_notes.json (group's Week 3 text), feature_evidence.csv (notebook 9b)
-  models/                           *.json + *.meta.json (+ feature_set_comparison.csv from notebook 9c)
+  models/                           *.json / *.joblib + *.meta.json (+ feature_set_comparison.csv from 9c)
   app/workers.py                    QRunnable workers; callbacks use QueuedConnection
   train/train_model.py, scripts/make_sample.py, tests/, models/
 ```
@@ -99,6 +113,12 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   tools" was observed with nine columns; don't state a conclusion for fifteen. No blocking/mitigation,
   no real SIEM/network integration (alert export is a file only).
 - Training and inference must share `app/core/features.py`; don't duplicate cleaning logic.
+- Model types (XGBoost, Random Forest, linear SVM) are defined only in `app/core/models.py` (settings,
+  save/load); training and the app both use it. `meta["model_type"]` (missing = XGBoost); names get
+  `_rf` / `_svm`. SHAP units differ by type (log-odds / model score / SVM decision value): use
+  `explain.output_unit` / `score_of`, never hard-code "log-odds". The 0.9 / 0.156 recorded results are
+  nine-column **XGBoost** results. The linear SVM cannot use missing values: such rows are "Not scored"
+  for it, and training refuses feature sets with gaps for it.
 - New charts: one file in `app/plots/` with `@register`; never edit `main_window.py` for a chart.
   Heavy work in `prepare()` (worker thread), drawing in `render()` onto the given Figure — never
   `plt.figure()` / pyplot state. Shared colours/styles come from `app/plots/_style.py`.
@@ -129,6 +149,8 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   qWait starves the worker thread and makes load/score timings look ~100x slower (some app.log lines
   from 26 and 31 Oct headless runs are slow for this reason; the app itself scores ~400,000 flows/s).
 - `ExplainerCache` uses an `RLock` because `memo()` computations call back into it.
+- Random Forest and SVM models are joblib files (a pickle): only open model files you made. RF SHAP
+  uses shap's TreeExplainer (no fast `pred_contribs`), so explaining many alerts is slower than XGBoost.
 - PyInstaller: `--collect-all xgboost` fails (imports `xgboost.testing`); `--add-data` sources must be
   absolute (resolved relative to `--specpath`); `--collect-submodules app` is needed for plugin discovery.
 - PowerShell is the main shell; inline `python -c` with nested quotes breaks easily — write a script
@@ -156,6 +178,13 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - Word documents: no `zip`, LibreOffice or `pdftoppm` here. Zip with Python `zipfile` (keep the
   original entry order), export PDF through Word COM (`ExportAsFixedFormat`), render pages with
   `pymupdf` (installed in the venv).
+- Raw PCAP work (4 Nov 2026): see `DDoSDetector/scripts/pcap/README.md`. The published 21 Feb CSV is incomplete
+  (1,048,575 rows = Excel's limit; half the port-80 flows from 02:18; none after 02:33) and its times are 12-hour
+  without AM/PM in UTC-4. `assemble_flows.py` reproduces its HOIC and LOIC-UDP flows exactly from the raw capture,
+  with IPs (`flows_assembled\part1_flows.csv` = the morning, `part2_flows.csv` = the HOIC afternoon). The morning is
+  complete in the published file; 1,598 of its 2,140 "Benign" rows are the server's ICMP port-unreachable replies to
+  the LOIC-UDP flood, which CICFlowMeter records as UDP flows to port 80 (found via the quoted inner UDP header).
+  The official tool is cloned for inspection at `..\CICFlowMeter` (`FINDINGS.md` there lists the code lines).
 - Windows Application Control (Smart App Control) blocked a freshly built `DDoSExplainer.exe` from
   starting on 22 Oct 2026, and on 26 Oct 2026 started blocking the PyPI build of
   `.venv\Lib\site-packages\shap\_cutils.pyd` (`import shap` fails, so the app and most tests do too;

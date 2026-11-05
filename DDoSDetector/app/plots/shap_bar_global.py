@@ -27,7 +27,7 @@ class ShapBarGlobal(ChartPlugin):
         for y, v in enumerate(imp[order]):
             ax.text(v, y, f"  {v:.3f}", va="center", fontsize=8, color=S.THEME["ink2"])
         ax.tick_params(axis="y", labelsize=8.5)
-        ax.set_xlabel("mean |SHAP value| (average impact on log-odds)")
+        ax.set_xlabel(f"mean |SHAP value| (average impact on the {ctx.unit})")
         ax.margins(x=0.12)
         what = ("feature group (sum of its columns' SHAP values per flow)" if int(view) == BY_GROUP
                 else "column; (F#) = Week 3 feature number")

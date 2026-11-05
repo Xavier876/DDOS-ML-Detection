@@ -54,7 +54,7 @@ class ShapByTool(ChartPlugin):
                     label=f"{t} (n={len(r.rows):,})")
         ax.set_yticks(range(len(names)))
         ax.set_yticklabels(np.array(names)[order], fontsize=8)
-        ax.set_xlabel("mean |SHAP value| (log-odds)")
+        ax.set_xlabel(f"mean |SHAP value| ({ctx.unit})")
         ax.legend(loc="lower right", fontsize=8, frameon=False, labelcolor=S.THEME["ink2"])
         per = "feature group" if int(view) == BY_GROUP else "column"
         S.title(figure, ax, "Do different tools rely on different features?",

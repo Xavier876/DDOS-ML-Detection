@@ -177,12 +177,24 @@ class ResultsTableModel(QAbstractTableModel):
         hits = np.flatnonzero(self.view == position)
         return int(hits[0]) if len(hits) else -1
 
+    def positions(self, view_rows) -> np.ndarray:
+        """Row positions in the loaded data for many rows of the (sorted/filtered) view."""
+        return self.view[np.asarray(view_rows, dtype=np.int64)]
+
+    def shown_positions(self) -> np.ndarray:
+        """Positions of every row the current filters show, in view order."""
+        return self.view.copy()
+
     # --- analyst verdicts ------------------------------------------------------------
     def set_review(self, pos: int, verdict: int | None = None, note: str | None = None):
         self.data_.review.set(pos, verdict, note)
         r = self.view_row_of(pos)
         if r >= 0:
             self.dataChanged.emit(self.index(r, self.column_of(VERDICT)), self.index(r, self.column_of(NOTE)))
+
+    def set_review_many(self, positions, verdict: int):
+        self.data_.review.set_many(positions, verdict)
+        self.review_reloaded()     # repaint the verdict column once, not row by row
 
     def review_reloaded(self):
         if self.rowCount():

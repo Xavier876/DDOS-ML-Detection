@@ -1,8 +1,8 @@
 """Load and save trained models plus their metadata.
 
 A model is three files sharing a name in the models folder:
-    <name>.json             XGBoost model (model.save_model)
-    <name>.meta.json        feature list, training info, metrics, library versions
+    <name>.json or .joblib  the model (XGBoost's own format, or joblib for Random Forest / linear SVM)
+    <name>.meta.json        model type, feature list, training info, metrics, library versions
     <name>.background.parquet (or .csv)  SHAP background sample of training features
 Any model with a .meta.json can be opened from the Model menu without code changes.
 """
@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from xgboost import XGBClassifier
 
 from .features import FEATURES_F9, feature_set_of
+from .models import FILE_SUFFIX, MODEL_TYPES, XGBOOST, load_model, model_type_of, save_model
 
 META_SUFFIX = ".meta.json"
 
@@ -25,7 +25,7 @@ META_SUFFIX = ".meta.json"
 @dataclass
 class ModelBundle:
     name: str
-    model: XGBClassifier
+    model: object               # XGBClassifier, RandomForestClassifier or models.LinearSVMModel
     meta: dict
     background: Optional[pd.DataFrame] = None
     meta_path: Optional[Path] = None
@@ -49,6 +49,19 @@ class ModelBundle:
         """Models with the same setup and different seeds are seed variants of each other."""
         return setup_of(self.meta, self.name)
 
+    @property
+    def model_type(self) -> str:
+        return model_type_from(self.meta)
+
+    @property
+    def model_type_name(self) -> str:
+        return MODEL_TYPES[self.model_type]
+
+
+def model_type_from(meta: dict) -> str:
+    """'xgboost', 'random_forest' or 'linear_svm'; models saved before the field existed are XGBoost."""
+    return meta.get("model_type") or XGBOOST
+
 
 def model_columns(meta: dict) -> list[str]:
     """The model's input columns, in order. Models trained before the feature registry stored
@@ -67,18 +80,18 @@ def file_version(path: Path) -> str:
 def _paths(models_dir: Path, name: str) -> dict[str, Path]:
     d = Path(models_dir)
     return {
-        "model": d / f"{name}.json",
         "meta": d / f"{name}{META_SUFFIX}",
         "parquet": d / f"{name}.background.parquet",
         "csv": d / f"{name}.background.csv",
     }
 
 
-def save_bundle(models_dir: Path, name: str, model: XGBClassifier, meta: dict,
+def save_bundle(models_dir: Path, name: str, model, meta: dict,
                 background: Optional[pd.DataFrame] = None) -> Path:
     p = _paths(models_dir, name)
     Path(models_dir).mkdir(parents=True, exist_ok=True)
-    model.save_model(p["model"])
+    meta["model_type"] = model_type_of(model)
+    model_file = save_model(model, Path(models_dir) / name)
     if background is not None:
         try:
             background.to_parquet(p["parquet"], index=False)
@@ -86,10 +99,22 @@ def save_bundle(models_dir: Path, name: str, model: XGBClassifier, meta: dict,
         except ImportError:  # pyarrow not installed
             background.to_csv(p["csv"], index=False)
             meta["background_file"] = p["csv"].name
-    meta["model_file"] = p["model"].name
-    meta["version"] = file_version(p["model"])
+    meta["model_file"] = model_file.name
+    meta["version"] = file_version(model_file)
     p["meta"].write_text(json.dumps(meta, indent=2), encoding="utf-8")
     return p["meta"]
+
+
+def model_file_of(meta_path: Path, meta: dict) -> Path:
+    name = meta_path.name[: -len(META_SUFFIX)] if meta_path.name.endswith(META_SUFFIX) else meta_path.stem
+    return meta_path.parent / meta.get("model_file", f"{name}{FILE_SUFFIX[model_type_from(meta)]}")
+
+
+def load_model_of(meta_path: Path, meta: dict | None = None):
+    """Just the model object of a saved bundle (used by charts that compare several models)."""
+    meta_path = Path(meta_path)
+    meta = meta if meta is not None else read_meta(meta_path)
+    return load_model(model_file_of(meta_path, meta), model_type_from(meta))
 
 
 _next_id = 0
@@ -100,11 +125,10 @@ def load_bundle(meta_path: Path) -> ModelBundle:
     meta_path = Path(meta_path)
     meta = json.loads(meta_path.read_text(encoding="utf-8"))
     name = meta_path.name[: -len(META_SUFFIX)] if meta_path.name.endswith(META_SUFFIX) else meta_path.stem
-    model_file = meta_path.parent / meta.get("model_file", f"{name}.json")
+    model_file = model_file_of(meta_path, meta)
     if not model_file.exists():
         raise FileNotFoundError(f"Model file not found: {model_file}")
-    model = XGBClassifier()
-    model.load_model(model_file)
+    model = load_model(model_file, model_type_from(meta))
 
     background = None
     bg = meta.get("background_file")
@@ -138,10 +162,11 @@ def read_metas(models_dir: Path) -> list[tuple[str, dict]]:
     return out
 
 
-def held_out_results(models_dir: Path, feature_set: str | None = None) -> list[dict]:
+def held_out_results(models_dir: Path, feature_set: str | None = None,
+                     model_type: str | None = None) -> list[dict]:
     """One row per seed-0 model: held-out tool (None = all tools seen), split, feature set and its
-    own test metrics (optionally only models of one feature set). Used by the Held-out comparison
-    chart and the model card."""
+    own test metrics (optionally only models of one feature set and/or one model type). Used by the
+    Held-out comparison chart and the model card."""
     rows = []
     for name, meta in read_metas(models_dir):
         m = meta.get("metrics") or {}
@@ -150,9 +175,12 @@ def held_out_results(models_dir: Path, feature_set: str | None = None) -> list[d
         fset = feature_set_of(model_columns(meta))
         if feature_set is not None and fset != feature_set:
             continue
+        if model_type is not None and model_type_from(meta) != model_type:
+            continue
         tool = meta.get("held_out_tool")
         split = meta.get("benign_split_mode") or ("random" if not tool else "per_day")
         rows.append({"name": name, "held_out": tool, "split": split, "feature_set": fset,
+                     "model_type": model_type_from(meta),
                      "recall": m.get("recall", {}), "n_test": m.get("n_test", {}),
                      "fpr": m.get("fpr"), "false_alarms": m.get("false_alarms"),
                      "pr_auc": m.get("pr_auc"), "base_rate": m.get("base_rate"),

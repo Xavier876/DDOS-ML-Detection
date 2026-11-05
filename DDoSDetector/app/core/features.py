@@ -306,7 +306,8 @@ def build_features(df: pd.DataFrame, columns=None) -> pd.DataFrame:
 
 def valid_mask(X: pd.DataFrame) -> np.ndarray:
     """True for rows whose CORE inputs (the original nine, feature 7) are all finite (these can be
-    scored). Missing values in features 8-15 are allowed: XGBoost handles them."""
+    scored). Missing values in features 8-15 are allowed: the tree models handle them (the linear
+    SVM cannot; scoring.score excludes such rows for it)."""
     core = [c for c in X.columns if c in _BY_COLUMN and group_of(c).core]
     return np.isfinite(X[core].to_numpy(dtype="float64")).all(axis=1)
 
