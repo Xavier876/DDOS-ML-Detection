@@ -11,10 +11,21 @@ explains them with SHAP, and supports an analyst review/feedback loop. It is a u
 evidence for the report, **not a production IDS**. Correctness and honesty about the model's limits
 matter more than polish.
 
-Specs, in order of precedence: update 4 (31 Oct 2026, project chat, no handoff file: the group settled
-on six feature groups; SYN Flag Cnt was replaced by feature 7, a port version of the group's dropped
-"flows to the same destination in a window", giving the default set `f9p` = 9 columns; done on branch
-`nine-column`, while `main` keeps update 3) wins over update 3 (decided in the project chat on 22 Oct
+Specs, in order of precedence: update 5 (5 Nov 2026, the user's decision "Build the six" in the session
+chat after the three-model feature search, `docs/feature_search_findings_2026-11-05.md`: the group's
+original feature 7 came back (flows to the same destination IP) with two more IP windows (distinct source
+IPs to the same destination IP; flows from the same source IP); default set `f7ip` = 7 columns, trained on
+the 20 Feb file + the relabelled 21 Feb capture; `f9p` models stay as the baseline; **not yet confirmed by
+the group**, so tell the user it is their call to present. Later on 5 Nov 2026 the user had the catalogue
+**renumbered**: app features 1–6 are the default model's inputs in column order (1 dst-IP flows, 2 distinct
+sources per dst IP, 3 src-IP flows, 4 fwd/bwd ratio, 5 indicators, 6 timing regularity), 7–18 the rest
+(7 rate, 8 duration, 9 inter-arrival, 10 SYN, 11 fwd pkt len, 12 port window, 13 reply, 14 RST/FIN, 15–18
+the update-3 groups); `FeatureGroup.week3` keeps each group's Week 3 document number, and the findings
+document and search script keep the old labels (F16/F18/F17/F3/F10/F11 = app 1–6)) wins over
+update 4 (31 Oct 2026, project chat, no handoff file: the group settled on six feature groups; SYN Flag Cnt
+was replaced by feature 7, a port version of the group's dropped "flows to the same destination in a
+window", giving the set `f9p` = 9 columns; done on branch `nine-column`, while `main` keeps update 3),
+which wins over update 3 (decided in the project chat on 22 Oct
 2026, no handoff file: features 12–15 added, SYN Flag Cnt dropped, feature set `f21` = 21 columns), which wins over
 `docs/HANDOFF_UPDATE_2.md` (15 columns, feature registry), which wins over
 `docs/HANDOFF_UPDATE_1.md`, which wins over `docs/HANDOFF_desktop_app.md`;
@@ -29,8 +40,13 @@ questions for a **live deployment** (the user said on 4 Nov 2026 that the group'
 wrong): taps/mirror ports feed sensors (CICFlowMeter live, features.py, XGBoost, SHAP) outside the firewall,
 in the DMZ, in the core and in the cloud; alerts go to a SIEM in the SOC; feedback and retraining happen in
 the SOC; people approve every response. It is a design, not built: the prototype on recorded files is the
-evidence. Group decisions kept: alerts = flag at a threshold chosen after testing (proposal: 0.5),
-retraining shown by a demonstration. Its evidence is `notebooks/ddos_week5_threshold_retraining.ipynb`.
+evidence. Group decisions kept: alerts = flag at a threshold chosen after testing (proposal: 0.5; since 6 Nov 2026
+the app starts each model at its own default, `model_store.default_threshold`: the lowest tested threshold whose
+false-alarm rate on the model's benign test split is within 0.1 %, else 0.5, shown on the Model card),
+retraining shown by a demonstration. Its evidence is `notebooks/ddos_week5_threshold_retraining_update6.ipynb`
+(6 Nov 2026: the relabelled data, the retrained models and the per-model threshold rule; outputs saved. The
+update-5 and pre-update-5 copies and the superseded `ddos_xgboost_detector` / `ddos_xgboost_starter` notebooks
+were removed on 5–6 Nov 2026 to slim the repo; they are in git history).
 On 4 Nov 2026 the user also asked for a pass against the grading guide (PDF in the user's OneDrive, `...\Assignments\MACHINE LEARNING FOR CYBERSECURITY - Group Project Assessment  Grading Guide.pdf`): Weeks 1–4 got
 "Update (4 November 2026)" notes (near-real-time deployment, live data source, what was actually run: no CV,
 class weights; a security evaluation with confusion matrices from metadata), and Week 3 got a new Section 7,
@@ -55,7 +71,8 @@ Python is the project venv `.venv` (Python 3.14; the only interpreter on this ma
 ```powershell
 .\.venv\Scripts\python.exe -m pytest DDoSDetector\tests            # 122 pass + 2 skipped, ~30 s, synthetic data
 .\.venv\Scripts\python.exe DDoSDetector\app\main.py [data\x.csv]   # run the app
-.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools [--seeds 0 1 2 3 4] [--feature-set f9p|f9|f15|f14|f21] [--model xgboost|random_forest|linear_svm]   # defaults f9p, xgboost
+.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools --files Tuesday-20-02-2018_relabelled.csv Wednesday-21-02-2018_victim_capture_labelled.csv [--seeds 0 1 2 3 4] [--model xgboost|random_forest|linear_svm]   # default set f7ip needs the IP files (= FILES_IP)
+.\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode all_tools --feature-set f9p [--feature-set f9|f15|f14|f21]   # the published pair (default --files): copy them back into data\ from C:\datasets\cse-cic-ids2018\processed first (removed from data\ on 5 Nov 2026; the master copy spells it "Thuesday")
 .\.venv\Scripts\python.exe DDoSDetector\train\train_model.py --mode held_out --held-out HOIC LOIC-HTTP LOIC-UDP [--benign-split by_file|attack_period]
 .\.venv\Scripts\python.exe DDoSDetector\scripts\make_sample.py --seconds 40      # time-slice test CSVs in data\
 powershell -ExecutionPolicy Bypass -File DDoSDetector\build_exe.ps1             # PyInstaller -> bin\Release
@@ -73,14 +90,14 @@ data/        CSVs (git-ignored, never commit)     docs/  handoffs     notebooks/
 DDoSDetector/                       the VS project (DDoSDetector.pyproj); working dir when run from VS
   app/paths.py                      all folder locations (data, models, logs, app/data) — use it, no cwd paths
   app/core/                         Qt-free logic, unit-tested:
-    features.py                     THE feature registry (groups 1-15; f9p/f9/f15/f14/f21 sets) + cleaning
+    features.py                     THE feature registry (groups 1-18; f7ip/f9p/f9/f15/f14/f21 sets) + window counts + cleaning
     models.py                       the 3 model types: settings, save/load (XGBoost JSON; RF/SVM joblib)
     csv_reader.py, scoring.py, model_store.py, explain.py (SHAP per model type, units, cache),
     impact.py, review.py, feature_notes.py, timing.py
   app/plots/                        one file per chart plugin (auto-discovered); base.py = interface
   app/ui/                           main_window, results_table (virtual model), plot_panel, dialogs
   app/data/                         feature_notes.json (group's Week 3 text), feature_evidence.csv (notebook 9b)
-  models/                           *.json / *.joblib + *.meta.json (+ feature_set_comparison.csv from 9c)
+  models/                           *.json / *.joblib + *.meta.json (f7ip = update 5, f9p = update-4 baseline)
   app/workers.py                    QRunnable workers; callbacks use QueuedConnection
   train/train_model.py, scripts/make_sample.py, tests/, models/
 ```
@@ -90,24 +107,31 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - **Never call the model output a "confidence" or a "probability"** (UI, exports, code, docs). It is the
   "model score" (0–1, uncalibrated because of `scale_pos_weight`). A test scans `app/` and README.
 - **Feature columns are defined only in the registry** (`app/core/features.py`): never write a list
-  of model columns anywhere else (a test scans for it). Default model (update 4, branch `nine-column`):
-  **6 feature groups (9 columns)**, set `f9p` = groups 1–4, 6 and 7, model `all_tools_f9p`. Only `f9p`
-  models ship on this branch (a test checks every `models/*.meta.json`); don't add other sets back to
-  `models/`. Groups 5 and 8–15 stay in the registry for the notebook comparisons. On `main`, update 3
-  still holds (`f21`, only `*_f21` models). The code loads any model opened by hand (tests use synthetic
-  f9/f15/f21/f9p models). Use `summary(columns)` for wording. Each
-  model's `.meta.json` has `feature_columns`; the app builds exactly those (`model_columns(meta)`;
-  no field = the original nine). IP addresses, ports and timestamps are **never** model inputs
-  (`Src IP`/`Dst IP`/`Dst Port` are alert tracing fields). Feature 7 (`dst_port_flows_10s`) uses
-  `Timestamp` and `Dst Port` only to count flows; they stay text (`CONTEXT_RAW`, not coerced).
-- Feature 7 is built from **every row of a capture file** (per `source_file` in training, before
-  cleaning; the whole loaded CSV in the app). Never build it on a subset or a random sample of rows.
-  Training's duplicate check ignores the port and feature 7, so the row count stays 8,788,935.
-- Rows with NaN/inf in the original nine columns (or the packet counts), or with no readable time or
-  port for feature 7, are "Not scored", never silently dropped; NaN in features 8–15 is allowed and
-  counted. Training drops core-NaN rows only.
-- **Never claim features 8–15 help** (a test scans the app and README). Report 9c numbers, no
-  "best set".
+  of model columns anywhere else (a test scans for it). Default model (update 5, branch `nine-column`):
+  **6 feature groups (7 columns)**, set `f7ip` = features 1–6, model `all_tools_f7ip`
+  (`DEFAULT_MODELS = ("all_tools_f7ip", "all_tools_f9p")`: the f9p one is the fallback offered for a CSV
+  without IP columns). Only `f7ip` and `f9p` models ship on this branch (a test checks every
+  `models/*.meta.json`); don't add other sets back to `models/`. Groups 7–18 stay in the registry for the
+  baseline (`f9p` = 7, 8, 9, 11, 4, 12) and the notebook comparisons; refer to groups by `key` in code
+  (`group_by_key`), by `week3` number in anything that quotes the group's document (`group_week3`). On `main`, update 3 still holds (`f21`). The code
+  loads any model opened by hand (tests use synthetic f9/f15/f21/f9p/f7ip models). Use `summary(columns)`
+  for wording. Each model's `.meta.json` has `feature_columns`; the app builds exactly those
+  (`model_columns(meta)`; no field = the original nine). IP addresses, ports and timestamps are **never**
+  model inputs (`Src IP`/`Dst IP`/`Dst Port` are alert tracing fields). The window groups 1–3 and 12 use
+  `Timestamp`, `Dst Port`, `Src IP`, `Dst IP` only to count flows; they stay text (`CONTEXT_RAW`, not
+  coerced; `FeatureGroup.window` marks the groups, `CONTEXT_COLUMNS` their outputs).
+- The window features (1–3, 12) are built from **every row of a capture file** (per `source_file` in
+  training, before cleaning; the whole loaded CSV in the app). Never build them on a subset or a random
+  sample of rows. Training's duplicate check ignores the port, the IPs and the window features, so the
+  published pair still gives 8,788,935 rows; the 20 Feb + relabelled 21 Feb pair gives 9,880,087.
+- Rows with NaN/inf in the original nine columns (or the packet counts), or with no readable time, port
+  or IP for a window feature, are "Not scored", never silently dropped; NaN in a non-core group is allowed
+  and counted. Training leaves such rows out (`drop_unscorable`, counted per file) and stops when a whole
+  file cannot provide a core input (the published 21 Feb CSV has no IPs, so `f7ip` needs
+  `--files ... Wednesday-21-02-2018_victim_capture_labelled.csv`). The linear SVM: a few training rows
+  with a missing value are left out and counted (`train_rows_dropped_missing`); more than 1 % refuses.
+- **Never claim the groups added after the first experiments (Week 3 features 8–15) help** (a test scans
+  the app and README for that wording). Report 9c numbers, no "best set".
 - Model card: numbers only from metadata. The recorded results (0.999 / 0.156 / 0.003, FPR 0.0084)
   are nine-column results, shown only for nine-column models and labelled. "No transfer to unseen
   tools" was observed with nine columns; don't state a conclusion for fifteen. No blocking/mitigation,
@@ -125,10 +149,15 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - Worker threads must not touch widgets or read window attributes; capture values before starting.
 - Do not edit the group's project documents. `feature_notes.json` holds the group's Week 3 text;
   the only addition is `expected` (our reading of each assumption's direction), shown as such.
-  Features 12–15 (`"status": "update3"`) have text drafted in the project chat (also in the UPDATE3
-  docx); replace it if the group rewrites it. Feature 7 (`"status": "update4"`) uses the group's Week 3
-  text for feature 7, except "raw data" and "calculation" (port version, drafted in the chat).
-  Don't invent feature text; ask the user. Verdicts are computed from `feature_evidence.csv`.
+  Each entry has `number` (app) and `week3_number`; numbers inside the group's own text are Week 3 numbers.
+  Features 15–18 (`"status": "update3"`) have text drafted in the project chat (also in the UPDATE3
+  docx); replace it if the group rewrites it. Feature 12 (`"status": "update4"`) uses the group's Week 3
+  text for feature 7, except "raw data" and "calculation" (port version, drafted in the chat). Feature 1
+  (`"status": "update5"`) is the group's Week 3 feature 7 text with the Week 3 table's raw data/calculation;
+  features 2 and 3 were drafted in this session on 5 Nov 2026 and say so ("not yet confirmed by the
+  group"). Don't invent feature text; ask the user. Verdicts are computed from `feature_evidence.csv`;
+  the rows for the window columns (1–3, 12) come from `scripts\feature_evidence_windows.py` (5 Nov 2026,
+  on the 20 Feb + relabelled 21 Feb files), the rest from notebook 9b.
 - When running notebooks, execute a **copy** (nbclient, cwd = `notebooks/`); don't save outputs into
   the user's notebooks.
 - Local Git repo (first commit 22 Oct 2026, identity set for this repo only); no remote. Branches:
@@ -156,22 +185,38 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
 - PowerShell is the main shell; inline `python -c` with nested quotes breaks easily — write a script
   file in the scratchpad instead.
 - Docstrings containing Windows paths need `r"""` (invalid escape warnings).
-- Models matching `*_seed*` are git-ignored but needed locally by the Seed stability chart. Both
-  branches share the folder: on `nine-column` the 21-column and nine-column seed models sit in
-  `DDoSDetector\models\_f21_seeds\` and `_f9_seeds\` (ignored, not listed by the app); move the
-  21-column ones back to `models\` when working on `main`.
+- Models matching `*_seed*` are git-ignored but needed locally by the Seed stability chart (f7ip and
+  f9p seeds 1–4 are in `models\`). On 5 Nov 2026 the user had everything not from the update-4/5 builds
+  removed from `models\`: the old nine- and 21-column seed folders (`_f9_seeds`, `_f21_seeds`, were
+  git-ignored, gone for good; retrain with `--feature-set f9|f21 --seeds 1 2 3 4` if `main` needs them),
+  `hybrid_comparison.csv`, and the tracked `all_tools_f9p_feedback` bundle and `feature_set_comparison.csv`
+  (notebook 9c's table; still in git history at `cfb1a61`; the Feature-set comparison tab shows a message
+  until a file is opened by hand or 9c is re-run).
 - The 15- and 21-column results so far are the same as or very close to the nine-column ones (e.g.
   HOIC held out 0.212); notebook 9c shows no recall change larger than the seed spread. Report, don't
-  interpret. Feature 7 (update-4 experiment, `notebooks\ddos_update4_experiments.ipynb`) is the one
+  interpret. The port window (update-4 experiment, `notebooks\ddos_update4_experiments.ipynb`) is the one
   change that passed the group's rule on held-out HOIC; held-out LOIC-HTTP stayed near 0.003.
+- Update 5 (5 Nov 2026): the IP-window set `f7ip` is the first that carried over to an unseen tool for all
+  three model types (search: `scripts\feature_search_ip.py`, write-up
+  `docs\feature_search_findings_2026-11-05.md`; built-in results in each model's metadata and README).
+  Say its limits every time: needs `Src IP`/`Dst IP`; one quiet network (median 7 flows per 10 s at the
+  victim) and ten attacker machines (feature 2 learned "about ten senders"); LOIC-UDP recall tops at 0.52
+  because the 1,598 ICMP reply rows are labelled attack and never flagged; Random Forest varies between
+  seeds; threshold 0.5 uncalibrated. Never say the window features are proven on a busy network.
 - pandas 3 parses these timestamps as `datetime64[us]`: never turn datetimes into seconds with
   `astype("int64") // 10**9`; subtract the epoch and use `.dt.total_seconds()` (as `_port_window` does).
-- 21 Feb file quirk: almost all of its 360,833 benign flows fall inside the HOIC attack (02:17–02:33),
-  about one per HOIC flow, to high TCP client ports (median 56,825; each port reused by many flows,
-  feature 7 median 1): very likely the server side of HOIC
-  connections labelled benign. The attack-period benign split mostly tests those flows; say so.
-- Sample CSVs: `make_sample.py` cuts whole time slices (`sample_wed_slices*.csv`); the older
-  random-row `sample_wed_50k*.csv` give feature 7 counts that are far too low.
+- 21 Feb file quirk (verified against the raw capture, 5 Nov 2026): 358,523 of its 360,833 "Benign" rows are
+  HOIC flows recorded in the server→attacker direction (CICFlowMeter's timeout branch keeps the old flow's
+  src/dst when an attacker reuses a client port; the labelling keyed on attacker source IPs), and 1,598 are
+  ICMP replies to the LOIC-UDP flood; only ~2,000 flows of the day are genuinely benign. The attack-period
+  benign split and any 21 Feb FPR therefore tested mislabelled HOIC flows; say so. The relabelled day is
+  `data\Wednesday-21-02-2018_victim_capture_labelled.csv` (`scripts\pcap\label_flows.py`, with IPs and a
+  `Label Reason` column); `train_model.load(files=..., extra_columns=...)` can train on it.
+- Sample CSVs: `make_sample.py` cuts whole time slices (`sample_wed_slices*.csv` from the published 21 Feb
+  file, no IPs: the app offers the `f9p` fallback; `sample_wed_ip_slices*.csv` from the relabelled capture,
+  with IPs, for the `f7ip` default: `--file Wednesday-21-02-2018_victim_capture_labelled.csv --stem
+  sample_wed_ip_slices`); the older random-row `sample_wed_50k*.csv` gave window counts far too low and were
+  deleted on 5 Nov 2026 (so were the published 20/21 Feb CSVs in `data\`, the build output and three old notebooks).
 - Git Bash heredocs feeding Python can turn `\a`/`\f` in Windows paths into control characters;
   write scripts to the scratchpad with the Write tool instead. PowerShell sometimes swallows a Python
   script's stdout; Bash shows it.
@@ -185,6 +230,9 @@ DDoSDetector/                       the VS project (DDoSDetector.pyproj); workin
   complete in the published file; 1,598 of its 2,140 "Benign" rows are the server's ICMP port-unreachable replies to
   the LOIC-UDP flood, which CICFlowMeter records as UDP flows to port 80 (found via the quoted inner UDP header).
   The official tool is cloned for inspection at `..\CICFlowMeter` (`FINDINGS.md` there lists the code lines).
+  IP-window candidate features (dst-IP flows, src-IP flows, distinct sources per dst IP; 10 s look-back) live in
+  `scripts\ip_window_features.py` and are searched by `scripts\feature_search_ip.py` (results in `docs\`); they
+  are an experiment, not registry groups, until the group decides.
 - Windows Application Control (Smart App Control) blocked a freshly built `DDoSExplainer.exe` from
   starting on 22 Oct 2026, and on 26 Oct 2026 started blocking the PyPI build of
   `.venv\Lib\site-packages\shap\_cutils.pyd` (`import shap` fails, so the app and most tests do too;

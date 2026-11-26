@@ -30,6 +30,47 @@ Done on 4 Nov 2026. The published 21 Feb CSV has no `Src IP`/`Dst IP`; the raw c
    port 80 with the server as source, labelled Benign because the source is not an attacker IP. Our assembler keeps
    them as protocol 1; matched on second + port + duration + counts they are the same 1,598 flows. So, like the
    21 Feb HOIC "benign" flows, most of the morning's benign rows are attack by-products, not normal traffic.
+7. The HOIC hour's "Benign" rows (5 Nov 2026): **358,523 of the 358,693 published Benign rows between 01:55 and
+   02:33 are HOIC request/response flows recorded in the server-to-attacker direction.** Mechanism, read in the
+   tool's code and checked on the packets: when a flow times out, `FlowGenerator.java` line 104 starts the
+   replacement flow with the *old* flow's source and destination. Each attacker reuses its client ports every
+   ~7 minutes (port 56963 of 18.216.24.42 was last used 409 s earlier and left a single server ACK behind), so from
+   02:17 on half the HOIC connections inherit "server → attacker", and the labelling script, keyed on attacker
+   *source* IPs, called them Benign. Proof: every one of those rows matches one of our flows with the direction
+   flipped and the first packet counted forward (published fwd = our bwd + 1, bwd = our fwd − 1, bytes swapped,
+   same second and duration): 358,523 matches; per minute ~24 k HOIC + ~24 k flipped = our 47.9 k. Together with
+   item 6 this means the published 21 Feb file has about 2,000 genuinely benign flows, not 360,833, and the
+   "half the port-80 flows from 02:18" in item 5 is this flip, not truncation (the truncation is after 02:33).
+8. `label_flows.py part1_flows.csv part2_flows.csv --out data\Wednesday-21-02-2018_victim_capture_labelled.csv`
+   writes the relabelled day for the app (decided with the user on 5 Nov 2026): a flow is an attack flow when
+   either end is one of the ten attacker addresses, labelled with the tool of its period
+   (`DDOS attack-LOIC-UDP` before noon, `DDOS attack-HOIC` after), and a `Label Reason` column says why
+   (attacker IP to victim / victim reply flow / victim ICMP port-unreachable reply); everything else is `Benign`
+   ("no attacker IP involved"). Timestamps are 24-hour `dd/mm/yyyy HH:MM:SS` in the dataset's zone. Result:
+   2,169,917 flows = HOIC 2,164,587 (14:11–15:05; 2,164,577 attacker → victim, 10 victim replies), LOIC-UDP
+   3,328 (1,730 flood + 1,598 ICMP replies), Benign 2,002 (341 source hosts; mostly IKE 500, SSH 22, SMB 445).
+   Checked with the app's own reader and models: it opens in 9 s, no row is "Not scored"; `all_tools_f9p`
+   flags HOIC 0.9993 and LOIC-UDP 0.52 (the flood, not the ICMP replies) with 3 false alarms on the 2,002 benign;
+   `hoic_held_out_f9p` gets 0.186 on the complete attack (its recorded ~0.2 was on the published 686 k).
+   The file also has `Src IP`/`Dst IP`, so the app's alert tracing shows the attacker addresses.
+9. The published **20 Feb** file does not need rebuilding (checked 5 Nov 2026 by scanning every row): it already has
+   `Src IP`/`Dst IP`, it is complete (7,948,748 rows, the whole network, LOIC-HTTP at a steady ~9,200 flows per minute
+   from 10:13 to 11:16) and its flows follow the same V3 rules. Only its labels are wrong, in the same three ways as
+   21 Feb: **797 UDP flows from the attacker IPs are labelled LOIC-HTTP** (they are the 20 Feb LOIC-UDP flood,
+   13:14–13:29, 32-byte payloads, ~134,000 packets per flow, no replies; the dataset's schedule lists LOIC-UDP on 20 Feb
+   at 13:13–13:32), 702 victim ICMP port-unreachable replies recorded as UDP flows are labelled Benign, and 130
+   LOIC-HTTP flows recorded server-to-attacker by the timeout quirk are labelled Benign.
+   `relabel_feb20.py` applies the 21 Feb rules (either end an attacker IP → attack; UDP → LOIC-UDP, else LOIC-HTTP;
+   `Label Reason` column) and rewrites the 12-hour stamps as 24-hour (the file runs 08:00–19:59, so "01:00–07:59" is
+   13:00–19:59), writing `data\Tuesday-20-02-2018_relabelled.csv` (4.4 GB, 275 s). Result: Benign 7,371,725,
+   LOIC-HTTP 575,524, LOIC-UDP 1,499 (797 flood + 702 ICMP replies); 1,629 labels changed, nothing else. Checked
+   with the app's reader and `f7ip` feature builder: 7,948,748 rows, no missing columns, 0 "Not scored". To train on
+   it: `--files Tuesday-20-02-2018_relabelled.csv Wednesday-21-02-2018_victim_capture_labelled.csv` (`FILES_IP` in
+   `train_model.py` still names the published file). All 42 `f7ip` models were retrained on it the same evening
+   (12 runs, 44 min; app tests pass): all-tools results unchanged or slightly better, but **LOIC-UDP held out drops
+   from 0.52 to 0.00** (the old 0.52 came from the 797 mislabelled 20 Feb flood flows sitting in the training set
+   as LOIC-HTTP) and XGBoost LOIC-HTTP held out (per-day split) becomes threshold-sensitive (0.01 at 0.5, 0.96 at
+   0.01, same on three seeds). Details and the full before/after table: `docs\retrain_on_relabelled_feb20_2026-11-05.md`.
 
 The official GitHub CICFlowMeter (V4) was also built (a full clone for inspection and fixes at
 `C:\Users\Xavie\source\repos\CICFlowMeter` with `build.ps1`, `run.ps1` and `FINDINGS.md`; a depth-1 build at

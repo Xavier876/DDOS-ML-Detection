@@ -32,6 +32,10 @@ def make_flows(n=400, seed=0, with_label=True):
     secs = np.sort(rng.integers(0, 120, n))
     df["Timestamp"] = [(start + pd.Timedelta(seconds=int(s))).strftime("%d/%m/%Y %H:%M:%S") for s in secs]
     df["Dst Port"] = np.where(attack, "80", rng.choice(["53", "443", "3389"], n))
+    # features 16-18 inputs (text): ten attacking machines hit one victim; benign flows are spread out
+    attackers = [f"18.218.115.{i}" for i in range(60, 70)]
+    df["Src IP"] = np.where(attack, rng.choice(attackers, n), [f"10.0.{rng.integers(0, 40)}.{rng.integers(1, 250)}" for _ in range(n)])
+    df["Dst IP"] = np.where(attack, "172.31.69.28", rng.choice(["172.31.69.28", "172.31.69.30", "172.31.69.31", "8.8.8.8"], n))
     if with_label:
         df["Label"] = lab
     return df

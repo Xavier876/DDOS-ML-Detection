@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import numpy as np
@@ -15,10 +16,11 @@ from PySide6.QtWidgets import (QAbstractItemView, QCheckBox, QDoubleSpinBox, QFi
 from app.core import review as rv
 from app.core.csv_reader import MissingColumnsError, read_flows, read_header
 from app.core.explain import ExplainerCache, contributions, top_features
-from app.core.features import (LABEL, TIME, TRACING_COLUMNS, extra_missing_mask, missing_columns, summary,
+from app.core.features import (DEFAULT_FEATURE_SET, LABEL, TIME, TRACING_COLUMNS, extra_missing_mask, feature_set_of,
+                               missing_columns, summary,
                                tools_from_labels)
-from app.core.model_store import (ModelBundle, list_models, load_bundle, model_columns, model_type_from, read_meta,
-                                  read_metas)
+from app.core.model_store import (ModelBundle, default_threshold, list_models, load_bundle, model_columns,
+                                  model_type_from, read_meta, read_metas)
 from app.core.models import ACCEPTS_MISSING, MODEL_TYPES, XGBOOST
 from app.core.scoring import (CODE_BENIGN, CODE_DDOS, CODE_NOT_SCORED, FLAG_NAMES, build_all, label_metrics,
                               score)
@@ -33,7 +35,9 @@ from app.ui.results_table import ResultsData, ResultsTableModel
 from app.workers import Jobs
 
 log = logging.getLogger(__name__)
-DEFAULT_MODELS = ("all_tools_f9p",)   # first one found is loaded at start-up (update 4)
+# First one found is loaded at start-up: the update-5 default, then the update-4 six (the comparison baseline,
+# also the one offered when a CSV has no IP columns).
+DEFAULT_MODELS = ("all_tools_f7ip", "all_tools_f9p")
 BULK_CONFIRM = 100   # marking more selected rows than this at once asks first
 VERDICT_SHORTCUTS = {rv.CONFIRMED: "Ctrl+1", rv.FALSE_POSITIVE: "Ctrl+2", rv.UNSURE: "Ctrl+3",
                      rv.UNREVIEWED: "Ctrl+0"}
@@ -245,12 +249,24 @@ class MainWindow(QMainWindow):
         paths = list_models(self.models_dir)
         if self.bundle and self.bundle.meta_path and self.bundle.meta_path not in paths:
             paths.append(self.bundle.meta_path)   # opened from elsewhere
-        kinds = {}
+        kinds, sets, main = {}, {}, {}
         for p in paths:                 # group the menu by model type, XGBoost first
             try:
-                kinds[p] = model_type_from(read_meta(p))
+                meta = read_meta(p)
+                kinds[p], sets[p] = model_type_from(meta), feature_set_of(model_columns(meta))
+                # "main" = the all-tools model and the per-day held-out models (the ones the report leads with)
+                main[p] = meta.get("mode") == "all_tools" or meta.get("benign_split_mode", "per_day") == "per_day"
             except (OSError, ValueError):
-                kinds[p] = XGBOOST
+                kinds[p], sets[p], main[p] = XGBOOST, "custom", True
+
+        def add_action(menu, p):
+            a = QAction(p.name.removesuffix(".meta.json"), self, checkable=True)
+            a.setData(str(p))
+            a.setChecked(self.bundle is not None and self.bundle.meta_path == p)
+            a.triggered.connect(lambda _=False, p=p: self.set_model(p))
+            self.model_group.addAction(a)
+            menu.addAction(a)
+
         for kind, kind_name in MODEL_TYPES.items():
             mine = [p for p in paths if kinds[p] == kind]
             if not mine:
@@ -259,13 +275,25 @@ class MainWindow(QMainWindow):
                 header = QAction(kind_name, self)
                 header.setEnabled(False)
                 self.model_menu.addAction(header)
-            for p in mine:
-                a = QAction(p.name.removesuffix(".meta.json"), self, checkable=True)
-                a.setData(str(p))
-                a.setChecked(self.bundle is not None and self.bundle.meta_path == p)
-                a.triggered.connect(lambda _=False, p=p: self.set_model(p))
-                self.model_group.addAction(a)
-                self.model_menu.addAction(a)
+            # Top level: the default set's main models (all tools; each tool held out, per-day benign split).
+            # Submenus: the other benign splits, the baseline / other feature sets, and the seed variants.
+            mine.sort(key=lambda p: (sets[p] != DEFAULT_FEATURE_SET, sets[p], p.name))
+            seeds = [p for p in mine if re.search(r"_seed\d+$", p.name.removesuffix(".meta.json"))]
+            rest = [p for p in mine if p not in seeds]
+            top = [p for p in rest if sets[p] == DEFAULT_FEATURE_SET and main[p]]
+            splits = [p for p in rest if sets[p] == DEFAULT_FEATURE_SET and not main[p]]
+            other = [p for p in rest if sets[p] != DEFAULT_FEATURE_SET]
+            if not top:                 # no default-set models of this type: show what there is
+                top, other = other, []
+            for p in top:
+                add_action(self.model_menu, p)
+            for label, group in ((f"Other benign splits ({len(splits)}: by file, attack period)", splits),
+                                 (f"Baseline and other feature sets ({len(other)})", other),
+                                 (f"Seed variants ({len(seeds)}, for the Seed stability chart)", seeds)):
+                if group:
+                    sub = self.model_menu.addMenu(f"{kind_name}: {label}")
+                    for p in group:
+                        add_action(sub, p)
         if not paths:
             a = QAction("(no models found: run train/train_model.py)", self)
             a.setEnabled(False)
@@ -303,10 +331,14 @@ class MainWindow(QMainWindow):
         self.bundle = bundle
         self.model_label.setText(f"Model: {bundle.model_type_name} {bundle.name}, {summary(bundle.features)} "
                                  f"[{bundle.version}]")
-        self.model_label.setToolTip(bundle.title)
+        # Each model starts at its own threshold (the lowest tested one within the false-alarm budget, else 0.5):
+        # one threshold does not fit every model. Setting the spin box re-flags any loaded results.
+        thr, why = default_threshold(bundle.meta)
+        self.thr.setValue(thr)
+        self.model_label.setToolTip(f"{bundle.title}\nDefault threshold {why}")
         self._rebuild_model_menu()
-        log.info("model %s (%s, version %s, %s) loaded", bundle.name, bundle.model_type_name, bundle.version,
-                 summary(bundle.features))
+        log.info("model %s (%s, version %s, %s) loaded; default threshold %s", bundle.name, bundle.model_type_name,
+                 bundle.version, summary(bundle.features), thr)
         if rescore and self.clean_df is not None:
             self._start_scoring(self.clean_df, self.results.source if self.results else "")
 
@@ -414,7 +446,7 @@ class MainWindow(QMainWindow):
         QMessageBox.critical(self, "Something went wrong", f"{e}\n\nDetails are in logs/app.log.")
 
     def _fit_columns_to_headers(self):
-        """Widen columns whose labelled header (e.g. 'bwd_fwd_bytes_ratio (F12)') or first value
+        """Widen columns whose labelled header (e.g. 'bwd_fwd_bytes_ratio (F15)') or first value
         (e.g. a timestamp) does not fit. Only row 0 is measured, so 1M rows stays fast."""
         head, m = self.table.horizontalHeader(), self.table_model
         fm_head, fm_cell = head.fontMetrics(), self.table.fontMetrics()
@@ -561,8 +593,9 @@ class MainWindow(QMainWindow):
         why = ("invalid values" if self.bundle is None or ACCEPTS_MISSING[self.bundle.model_type]
                else "invalid or missing values")       # the linear SVM cannot use missing values
         parts = [f"<b>{n:,}</b> flows", f"<b>{n_ddos:,}</b> flagged DDoS", f"<b>{n_ns:,}</b> not scored ({why})"]
-        if self._n_extra_missing:   # allowed for the tree models: they handle missing values in features 8-15
-            parts.append(f"<b>{self._n_extra_missing:,}</b> flows have missing values in features 8 to 15")
+        if self._n_extra_missing:   # allowed for the tree models: they handle missing values in non-core inputs
+            parts.append(f"<b>{self._n_extra_missing:,}</b> flows have a missing value in an optional input "
+                         "(scored by the tree models)")
         parts += [f"<b>{n_rev:,}</b> reviewed", f"showing {self.table_model.rowCount():,}"]
         text = " · ".join(parts)
         if r.tools is not None:
@@ -816,7 +849,7 @@ class MainWindow(QMainWindow):
                     version=self.bundle.version if self.bundle else "", models_dir=self.models_dir).exec()
 
     def show_features(self):
-        FeaturesDialog(self).exec()
+        FeaturesDialog(self, columns=self.bundle.features if self.bundle else None).exec()
 
     def closeEvent(self, event):
         if not self._maybe_save_review():

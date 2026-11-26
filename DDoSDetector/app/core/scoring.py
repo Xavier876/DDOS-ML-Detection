@@ -24,7 +24,7 @@ def score(bundle: ModelBundle, df: pd.DataFrame) -> tuple[pd.DataFrame, np.ndarr
 
     Returns (X, scores): X holds the model inputs for every row and scores is the model score
     (0..1), NaN for rows that could not be scored (NaN/inf in a core column). Missing values in
-    features 8-15 are allowed for the tree models; the linear SVM cannot score such rows, so they are
+    the non-core groups are allowed for the tree models; the linear SVM cannot score such rows, so they are
     "Not scored" for it. No row is dropped.
     """
     missing = check_features(bundle.meta, buildable_columns(df.columns))

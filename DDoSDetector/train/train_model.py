@@ -6,10 +6,16 @@ r"""Train a DDoS detector and write model, metadata and SHAP background sample.
     python -m train.train_model --mode hoic_held_out      (same as --mode held_out --held-out HOIC)
     python -m train.train_model --mode all_tools --seeds 0 1 2 3 4        (seed stability)
     python -m train.train_model --mode all_tools --extra-labelled feedback.csv   (retrain)
-    python -m train.train_model --mode all_tools --feature-set f9     (the original nine columns)
+    python -m train.train_model --mode all_tools --feature-set f9p    (the update-4 six groups)
+    python -m train.train_model --mode all_tools --files Tuesday-20-02-2018_TrafficForML_CICFlowMeter.csv Wednesday-21-02-2018_victim_capture_labelled.csv
+                                                        (the files the default set f7ip needs: with IPs)
     python -m train.train_model --mode all_tools --model random_forest    (comparison models:
     python -m train.train_model --mode all_tools --model linear_svm        random_forest, linear_svm)
-Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f9p, --model xgboost.
+Defaults: --data-dir <solution>\data, --out DDoSDetector\models, --feature-set f7ip, --model xgboost,
+--files = the two published CSVs. The default set f7ip needs Src IP and Dst IP: the published 21 Feb file
+has neither, so train it with --files naming the 21 Feb capture rebuilt from the raw packets
+(data\Wednesday-21-02-2018_victim_capture_labelled.csv, scripts\pcap\label_flows.py); a file that
+cannot provide a core input of the chosen set stops the run with a message.
 
 Follows ddos_xgboost_starter_v2.ipynb:
   all_tools  = section 10 baseline (random 70/30 split stratified by tool; optimistic)
@@ -17,13 +23,16 @@ Follows ddos_xgboost_starter_v2.ipynb:
                per_day        earlier 70% of each file's benign flows train, later 30% test (notebook)
                by_file        benign of the earlier file trains, the later file tests (notebook)
                attack_period  benign flows inside the held-out tool's attack window test, the rest train
-Feature sets come from the registry in app/core/features.py: f9p = features 1-4, 6 and 7 (SYN
-replaced by the port window; the default since update 4), f9 = the original nine columns, f15 =
-fifteen (features 1-6 and 8-11), f14 = f15 without SYN, f21 = f14 + features 12-15 (update 3).
-Outputs are named <setup>_<set>[_rf|_svm] (all_tools_f9p, all_tools_f9p_rf, all_tools_f9p_svm, ...);
-f9 keeps the original names (all_tools, hoic_held_out, ...). Model settings live in app/core/models.py,
-shared with the app; every model type gets the same splits, so their test numbers are comparable. Feature 7 is built per file on every row read, before the cleaning below,
-because the app builds it on every row of the file it opens.
+Feature sets come from the registry in app/core/features.py (numbers are the app's since 5 Nov 2026:
+1-6 = the default model's inputs): f7ip = features 1-6 (the IP windows, the forward/backward ratio, the
+indicators and timing regularity; the default since update 5), f9p = features 7, 8, 9, 11, 4 and 12 (the
+update-4 six: SYN replaced by the port window), f9 = the original nine columns (7-11 and 4), f15 = f9 +
+13, 14, 5, 6, f14 = f15 without SYN, f21 = f14 + 15-18 (update 3). Outputs are named <setup>_<set>[_rf|_svm] (all_tools_f7ip, all_tools_f7ip_rf, ...); f9 keeps
+the original names (all_tools, hoic_held_out, ...). Model settings live in app/core/models.py, shared
+with the app; every model type gets the same splits, so their test numbers are comparable. The window
+features (7, 16-18) are built per file on every row read, before the cleaning below, because the app
+builds them on every row of the file it opens. Rows with no value for a core input of the chosen set
+(no readable time, port or IP) are left out of training, as the app leaves them "Not scored".
 """
 from __future__ import annotations
 
@@ -44,8 +53,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.core.csv_reader import read_flows  # noqa: E402
 from app.core.features import (  # noqa: E402
     ATTACK_TOOLS, CAPTURE_COLUMN, CONTEXT_COLUMNS, CONTEXT_RAW, CORE_RAW, DEFAULT_FEATURE_SET, EXTRA_RAW,
-    FEATURE_SETS, FEATURES_F9, LABEL, LABEL_MAPPING, PORT, TIME, build_features, buildable_columns,
-    columns_for, groups_for, parse_timestamps, summary, tools_from_labels,
+    FEATURE_SETS, FEATURES_F9, LABEL, LABEL_MAPPING, TIME, build_features, buildable_columns,
+    columns_for, group_of, groups_for, parse_timestamps, required_raw, summary, tools_from_labels,
 )
 from app.core.model_store import save_bundle  # noqa: E402
 from app.core.models import (ACCEPTS_MISSING, MODEL_TYPES, NAME_SUFFIX, XGBOOST, make_model,  # noqa: E402
@@ -55,6 +64,11 @@ from app.paths import DATA_DIR, MODELS_DIR  # noqa: E402
 
 FILES = ["Tuesday-20-02-2018_TrafficForML_CICFlowMeter.csv",
          "Wednesday-21-02-2018_TrafficForML_CICFlowMeter.csv"]
+# The files the default set f7ip is trained on: the 20 Feb file with its labels corrected (scripts\pcap\relabel_feb20.py)
+# and the 21 Feb capture rebuilt from the raw packets (it has the IPs; the published 21 Feb file has none).
+FILES_IP = ["Tuesday-20-02-2018_relabelled.csv",
+            "Wednesday-21-02-2018_victim_capture_labelled.csv"]
+CONTEXT_KEYS = [c for c in CONTEXT_RAW if c != TIME]   # Dst Port, Src IP, Dst IP: text, never model inputs
 BENIGN_CAP = 1_000_000
 TRAIN_FRAC = 0.7
 BACKGROUND_PER_TOOL = 250   # SHAP background: equal rows per tool (LOIC-UDP is tiny)
@@ -91,10 +105,13 @@ def hyperparams(spw: float, seed: int) -> dict:
     return xgboost_params(spw, seed)
 
 
-def load(data_dir: Path, nrows: int | None) -> pd.DataFrame:
-    """Load both days, keep benign + DDoS, clean exactly as the notebook does."""
+def load(data_dir: Path, nrows: int | None, files: list[str] = FILES,
+         extra_columns: tuple[str, ...] = ()) -> pd.DataFrame:
+    """Load both days, keep benign + DDoS, clean exactly as the notebook does.
+    `files` replaces the two published CSVs (e.g. the relabelled 21 Feb capture); `extra_columns` are kept
+    as text and ignored by the duplicate check (Src IP / Dst IP are read anyway since update 5)."""
     parts = []
-    for name in FILES:
+    for name in files:
         t0 = time.time()
 
         def keep_known(chunk):
@@ -102,11 +119,11 @@ def load(data_dir: Path, nrows: int | None) -> pd.DataFrame:
             return chunk[chunk["tool"] != "Other"]
 
         d = read_flows(data_dir / name, chunksize=1_000_000, chunk_filter=keep_known, nrows=nrows,
-                       required_for=FEATURES_F9)       # extra columns are read when present
+                       required_for=FEATURES_F9, extra_columns=extra_columns)   # extra columns are read when present
         d = d.drop(columns=["row"])
         d[TIME] = parse_timestamps(d[TIME])
         d[CAPTURE_COLUMN] = name
-        for c in EXTRA_RAW + [PORT]:
+        for c in EXTRA_RAW + CONTEXT_KEYS:
             if c not in d.columns:
                 print(f"   optional column missing in {name} (left as missing values): {c}")
         print(f"  {name}: {len(d):,} benign/DDoS rows ({time.time() - t0:.0f}s)")
@@ -114,21 +131,41 @@ def load(data_dir: Path, nrows: int | None) -> pd.DataFrame:
     df = pd.concat(parts, ignore_index=True)
     df["y"] = (df["tool"] != "Benign").astype(int)
 
-    # Feature 7 counts every flow of each file (per CAPTURE_COLUMN), as the app does for the file it
-    # opens, so it is built before the cleaning below and joined back by row.
-    context = (build_features(df, CONTEXT_COLUMNS) if all(c in df.columns for c in CONTEXT_RAW)
-               else pd.DataFrame(index=df.index))
+    # The window features (7, 16-18) count every flow of each file (per CAPTURE_COLUMN), as the app does
+    # for the file it opens, so they are built before the cleaning below and joined back by row. A window
+    # whose key column no file has is skipped; a file lacking the key gets missing values.
+    ctx_cols = [c for c in buildable_columns(df.columns) if c in CONTEXT_COLUMNS]
+    context = build_features(df, ctx_cols) if ctx_cols else pd.DataFrame(index=df.index)
     n0 = len(df)
     # As in the notebook: drop rows with NaN/inf in the ORIGINAL columns only (extras may be missing),
     # and judge duplicates on the original columns only (not the port, which earlier runs did not
     # read), so row counts match earlier runs.
     df = df.dropna(subset=CORE_RAW)   # inf already turned into NaN
-    df = df.drop_duplicates(subset=[c for c in df.columns if c not in EXTRA_RAW + [PORT, CAPTURE_COLUMN]])
+    df = df.drop_duplicates(subset=[c for c in df.columns
+                                    if c not in EXTRA_RAW + CONTEXT_KEYS + [CAPTURE_COLUMN, *extra_columns]])
     print(f"  cleaning: {n0:,} -> {len(df):,} rows")
     df = df.join(context).reset_index(drop=True)
     cols = [c for c in buildable_columns(df.columns) if c not in CONTEXT_COLUMNS]
     df[cols] = build_features(df, cols)
     return df
+
+
+def drop_unscorable(df: pd.DataFrame, cols: list[str]) -> pd.DataFrame:
+    """Leave out rows with no value for a core input of the feature set (no readable time, port or IP for a
+    window feature), as the app leaves them "Not scored". Stops when a whole file has none: that file lacks
+    a column the set needs (e.g. the published 21 Feb CSV has no IPs for f7ip)."""
+    core = [c for c in cols if group_of(c).core]
+    bad = df[core].isna().any(axis=1) if core else pd.Series(False, index=df.index)
+    if not bad.any():
+        return df
+    for name, n in df.loc[bad, CAPTURE_COLUMN].value_counts().items():
+        total = int((df[CAPTURE_COLUMN] == name).sum())
+        print(f"  {name}: {n:,} of {total:,} rows have no value for a core input ({', '.join(core)}) and are left out")
+        if n == total:
+            raise SystemExit(f"{name} cannot provide the inputs {core}: it lacks one of the columns "
+                             f"{required_raw(core)}. Use --files with a file that has them (for the IP "
+                             f"windows: {FILES_IP[1]}, built by scripts\\pcap\\label_flows.py).")
+    return df[~bad].reset_index(drop=True)
 
 
 def split_all_tools(df: pd.DataFrame, seed: int):
@@ -165,12 +202,20 @@ def split_held_out(df: pd.DataFrame, seed: int, held_out: str = "HOIC", split: s
     return tr, te, info
 
 
-def evaluate(model, te: pd.DataFrame, cols: list[str]) -> dict:
-    p = model.predict_proba(te[cols])[:, 1]
+def evaluate(model, te: pd.DataFrame, cols: list[str], accepts_missing: bool = True) -> dict:
+    """Test metrics at threshold 0.5. A model that cannot use missing values (the linear SVM) scores only the
+    rows without any, as the app does; the others count as not flagged and are reported as not_scored."""
+    X = te[cols]
+    ok = np.ones(len(X), dtype=bool) if accepts_missing else np.isfinite(X.to_numpy(dtype="float64")).all(axis=1)
+    p = np.zeros(len(X))
+    if ok.any():
+        p[ok] = model.predict_proba(X[ok])[:, 1]
     y, tool = te["y"].to_numpy(), te["tool"].to_numpy()
     pred = p >= 0.5
     m = {"threshold": 0.5, "n_test_benign": int((y == 0).sum()), "n_test_attack": int((y == 1).sum()),
          "recall": {}, "n_test": {}}
+    if not ok.all():
+        m["not_scored"] = int((~ok).sum())
     for t in ATTACK_TOOLS:
         mask = tool == t
         if mask.any():
@@ -249,9 +294,17 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
         tr = pd.concat([tr, extra], ignore_index=True)
     if tr["y"].nunique() < 2:
         raise SystemExit("Training data has only one class; use more rows.")
-    if not ACCEPTS_MISSING[a.model] and tr[cols].isna().any().any():
-        raise SystemExit(f"{MODEL_TYPES[a.model]} cannot use rows with missing values (features 8-15 of this "
-                         f"feature set); use --feature-set f9p or f9.")
+    dropped_missing = 0
+    if not ACCEPTS_MISSING[a.model]:
+        gaps = tr[cols].isna().any(axis=1)
+        dropped_missing = int(gaps.sum())
+        if dropped_missing > 0.01 * len(tr):
+            raise SystemExit(f"{MODEL_TYPES[a.model]} cannot use rows with missing values and {dropped_missing:,} "
+                             f"of {len(tr):,} training rows have one (a non-core group of this feature set); "
+                             f"use a feature set without gaps (f9p, f9).")
+        if dropped_missing:   # a few rows (e.g. iat_cv missing when the IAT mean is -1): left out, recorded
+            print(f"  {MODEL_TYPES[a.model]}: {dropped_missing:,} training rows with a missing value left out")
+            tr = tr[~gaps]
     spw = (tr["y"] == 0).sum() / (tr["y"] == 1).sum()
     model, params = make_model(a.model, spw, seed)
     weights = f"scale_pos_weight={spw:.2f}" if a.model == XGBOOST else "class weights balanced"
@@ -262,7 +315,7 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
     print(f"  trained in {train_sw.seconds:.1f}s")
 
     with Stopwatch() as pred_sw:
-        metrics = evaluate(model, te, cols)
+        metrics = evaluate(model, te, cols, ACCEPTS_MISSING[a.model])
     print_metrics(metrics)
 
     name = base if seed == 0 else f"{base}_seed{seed}"
@@ -272,7 +325,7 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
                  + setup_title(a.mode, held_out, split) + f", {summary(cols)}"
                  + (" + analyst feedback" if extra is not None else "") + ("" if seed == 0 else f", seed {seed}"),
         "feature_columns": cols,      # exactly these, in this order (the app builds them from the registry)
-        "feature_groups": [{"number": g.number, "key": g.key, "title": g.title,
+        "feature_groups": [{"number": g.number, "week3": g.week3, "key": g.key, "title": g.title,
                             "columns": [c for c in g.output_columns if c in cols]} for g in groups_for(cols)],
         "feature_set": a.feature_set,
         "label_mapping": LABEL_MAPPING,
@@ -288,9 +341,10 @@ def train_one(df: pd.DataFrame, a, seed: int, extra: pd.DataFrame | None, base: 
                    "predict_seconds": round(pred_sw.seconds, 3), "predict_rows": int(len(te)),
                    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"},
         "seed": seed,
-        "data_files": FILES,
+        "data_files": list(getattr(a, "files", FILES)),
         "nrows_per_file": a.nrows,
         "extra_labelled": [str(p) for p in a.extra_labelled] if a.extra_labelled else None,
+        "train_rows_dropped_missing": dropped_missing,
         "rows_after_cleaning": {t: int(n) for t, n in df["tool"].value_counts().items()},
         "train_rows": {t: int(n) for t, n in tr["tool"].value_counts().items()},
         "test_rows": {t: int(n) for t, n in te["tool"].value_counts().items()},
@@ -314,8 +368,12 @@ def main(argv=None) -> int:
     ap.add_argument("--benign-split", choices=list(BENIGN_SPLITS), default="per_day",
                     help="held-out benign split (default per_day, as in the notebook)")
     ap.add_argument("--feature-set", choices=list(FEATURE_SETS), default=DEFAULT_FEATURE_SET,
-                    help="f9p = SYN replaced by the port window (default, update 4); f9 = the original "
+                    help="f7ip = IP windows + ratio + indicators + timing regularity (default, update 5; needs "
+                         "--files with IPs); f9p = SYN replaced by the port window (update 4); f9 = the original "
                          "nine; f21 = 21 columns, update 3; f15 = fifteen; f14 = f15 without SYN")
+    ap.add_argument("--files", nargs="+", default=FILES, metavar="CSV",
+                    help="CSV files in --data-dir to train on (default: the two published files; for f7ip: "
+                         + " ".join(FILES_IP) + ")")
     ap.add_argument("--model", choices=list(MODEL_TYPES), default=XGBOOST,
                     help="xgboost (main model, default), random_forest or linear_svm (the group's comparison "
                          "models); settings in app/core/models.py")
@@ -334,7 +392,7 @@ def main(argv=None) -> int:
         ap.error("--name can only be used with a single --held-out tool")
 
     print(f"Loading data from {a.data_dir} ...")
-    df = load(a.data_dir, a.nrows)
+    df = load(a.data_dir, a.nrows, a.files)
     print(df["tool"].value_counts().to_string())
 
     # The feature set's columns; a group whose raw columns are absent from every file is left out
@@ -345,6 +403,7 @@ def main(argv=None) -> int:
     if dropped:
         print(f"  NOTE: left out (raw columns missing from the files): {dropped}")
     print(f"  model inputs ({summary(cols)}): {cols}")
+    df = drop_unscorable(df, cols)
     extra = load_extra_labelled(a.extra_labelled, cols) if a.extra_labelled else None
 
     for held in (a.held_out if a.mode == "held_out" else [None]):

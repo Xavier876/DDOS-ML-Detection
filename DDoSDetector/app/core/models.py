@@ -28,9 +28,9 @@ from xgboost import XGBClassifier
 
 XGBOOST, RANDOM_FOREST, LINEAR_SVM = "xgboost", "random_forest", "linear_svm"
 MODEL_TYPES = {XGBOOST: "XGBoost", RANDOM_FOREST: "Random Forest", LINEAR_SVM: "Linear SVM"}
-NAME_SUFFIX = {XGBOOST: "", RANDOM_FOREST: "_rf", LINEAR_SVM: "_svm"}     # all_tools_f9p, all_tools_f9p_rf, ...
+NAME_SUFFIX = {XGBOOST: "", RANDOM_FOREST: "_rf", LINEAR_SVM: "_svm"}     # all_tools_f7ip, all_tools_f7ip_rf, ...
 FILE_SUFFIX = {XGBOOST: ".json", RANDOM_FOREST: ".joblib", LINEAR_SVM: ".joblib"}
-# Missing values (NaN in features 8-15) are allowed for the tree models; the linear SVM cannot use them,
+# Missing values (NaN in a non-core group) are allowed for the tree models; the linear SVM cannot use them,
 # so the app counts such rows as "Not scored" for it and training refuses feature sets that have them.
 ACCEPTS_MISSING = {XGBOOST: True, RANDOM_FOREST: True, LINEAR_SVM: False}
 

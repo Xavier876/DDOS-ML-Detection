@@ -1,13 +1,15 @@
 """Held-out comparison: recall on each DDoS tool when it was SEEN in training (all_tools model)
 vs when it was HELD OUT (one model per tool and benign split), plus each model's false
 positive rate. Built from the models' own test metrics in the .meta.json files, so it does not
-depend on the loaded CSV.
+depend on the loaded CSV. Only models of the active model's feature set AND model type are shown
+(the Model types tab compares the types); before 5 Nov 2026 the types were mixed and whichever
+sorted last (the SVM) overwrote the others.
 """
 import numpy as np
 
 from app.core.features import ATTACK_TOOLS, feature_set_of, summary
 from app.core.model_store import held_out_results, model_columns, model_type_from
-from app.core.models import MODEL_TYPES, NAME_SUFFIX
+from app.core.models import MODEL_TYPES
 
 from . import _style as S
 from .base import ChartPlugin, message, register
@@ -32,6 +34,15 @@ def comparison_table(rows: list[dict]) -> dict:
     return table
 
 
+def held_out_table(models_dir, model_meta: dict) -> tuple[dict, str, str]:
+    """(comparison table, feature set, model type) for the models that match the active model's feature
+    set and model type."""
+    fset = feature_set_of(model_columns(model_meta))
+    kind = model_type_from(model_meta)
+    table = comparison_table(held_out_results(models_dir, fset, kind)) if models_dir else {}
+    return table, fset, kind
+
+
 @register
 class HeldOutComparison(ChartPlugin):
     name = "Held-out comparison"
@@ -41,12 +52,11 @@ class HeldOutComparison(ChartPlugin):
 
     def render(self, figure, ctx):
         S.style_figure(figure)
-        fset = feature_set_of(model_columns(ctx.model_meta))
-        table = comparison_table(held_out_results(ctx.models_dir, fset)) if ctx.models_dir else {}
+        table, fset, kind = held_out_table(ctx.models_dir, ctx.model_meta)
         if not any(len(v) for k, v in table.items() if k != "seen"):
-            return message(figure, f"No held-out models with the active model's feature set ({fset}) "
-                                   "in the models folder.\n\nTrain them with:\ntrain_model.py --mode held_out "
-                                   f"--held-out HOIC LOIC-HTTP LOIC-UDP --feature-set {fset}")
+            return message(figure, f"No held-out models of this type ({MODEL_TYPES[kind]}) with the active model's feature set "
+                                   f"({fset}) in the models folder.\n\nTrain them with:\ntrain_model.py --mode held_out "
+                                   f"--held-out HOIC LOIC-HTTP LOIC-UDP --feature-set {fset} --model {kind}")
         table = {k: v for k, v in table.items() if v or k == "seen"}
         groups = [g for g in GROUPS if g[0] in table]
         gs = figure.add_gridspec(2, 1, height_ratios=[1.3, 1], left=0.09, right=0.98, top=0.8,
@@ -87,5 +97,6 @@ class HeldOutComparison(ChartPlugin):
                 if fset == "f9" else
                 "LOIC-UDP has only about 1,730 flows, so its bars are a stress test, not a reliable number.")
         S.title(figure, figure.axes[0], "Does the model detect a DDoS tool it never saw?",
-                f"Models with {summary(model_columns(ctx.model_meta))}. Numbers from each model's own metadata (its own test split). Seen in training = optimistic upper "
-                "bound (random split); tool and capture day are confounded. " + note)
+                f"{MODEL_TYPES[kind]} models with {summary(model_columns(ctx.model_meta))} ({fset}). Numbers from each "
+                "model's own metadata (its own test split). Seen in training = optimistic upper bound (random split); "
+                "tool and capture day are confounded. " + note)

@@ -31,9 +31,9 @@ EXPECTED_F15 = ["Flow Pkts/s", "Flow Byts/s", "Flow Duration", "Flow IAT Mean", 
 def test_registry_column_order_and_groups():
     assert F.columns_for("f15") == EXPECTED_F15          # order matters for a trained model
     assert F.columns_for("f9") == EXPECTED_F15[:9]
-    assert [g.number for g in F.REGISTRY] == list(range(1, 16))   # group 7 is back since update 4
+    assert [g.number for g in F.REGISTRY] == list(range(1, 19))   # group 7 is back since update 4; 16-18 since update 5
     assert F.summary(F.FEATURES_F15) == "10 feature groups (15 columns)"
-    assert F.column_label("empty_payload") == "empty_payload (F10)"
+    assert F.column_label("empty_payload") == "empty_payload (F5)"
     assert F.feature_set_of(EXPECTED_F15) == "f15" and F.feature_set_of(EXPECTED_F15[:9]) == "f9"
 
 
@@ -110,7 +110,7 @@ def test_group_shap_additivity_and_margin(bundle15, flows):
     margin = bundle15.model.predict(X.iloc[s.rows], output_margin=True)
     np.testing.assert_allclose(s.base_value + s.values.sum(1), margin, atol=1e-4)
     gv, labels = group_shap(s.values, list(s.data.columns))
-    assert gv.shape == (80, 10) and labels[0].startswith("F1 ") and not any(l.startswith("F7 ") for l in labels)
+    assert gv.shape == (80, 10) and labels[0].startswith("F4 ") and not any(l.startswith("F12 ") for l in labels)
     np.testing.assert_allclose(gv.sum(1), s.values.sum(1), atol=1e-9)
     vals, names, data = shap_view(s.values, s.data, BY_GROUP)
     assert data is None and len(names) == 10
@@ -141,7 +141,7 @@ def test_shap_charts_render_15_columns_both_views(bundle15, view):
             p.prepare(ctx)
             p.render(fig, ctx)
             labels = [t.get_text() for ax in fig.axes for t in ax.get_yticklabels()]
-            assert any("(F10)" in l or "F10 " in l for l in labels), cls.name
+            assert any("(F5)" in l or "F5 " in l for l in labels), cls.name
 
 
 # --- feature-set comparison chart ---------------------------------------------------------
@@ -201,7 +201,7 @@ def test_training_metadata_contains_columns_and_results(tmp_path, flows):
         pytest.skip("no trained f15 models in the models folder")
     meta = json.loads(real[0].read_text(encoding="utf-8"))
     assert meta["feature_columns"] == F.FEATURES_F15 and meta["feature_set"] == "f15"
-    assert [g["number"] for g in meta["feature_groups"]] == [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
+    assert [g["number"] for g in meta["feature_groups"]] == [4, 5, 6, 7, 8, 9, 10, 11, 13, 14]
     assert meta["metrics"]["recall"] and "fpr" in meta["metrics"] and meta["versions"]["xgboost"]
 
 
@@ -225,8 +225,9 @@ def test_features_panel_lists_ten_groups(tmp_path, qapp):
     from app.ui.features_dialog import features_html
     notes = load_notes(FEATURE_NOTES)
     without = features_html(notes, None)
-    numbers = [int(n) for n in re.findall(r"<h3>Feature (\d+):", without)]
-    assert numbers == list(range(1, 16))   # feature 7 is back as a group since update 4
+    numbers = [int(n) for n in re.findall(r"<h3>(?:Input \d+ of \d+ · )?Feature (\d+):", without)]
+    assert sorted(numbers) == list(range(1, 19))   # feature 7 is back since update 4; 16-18 added in update 5
+    assert numbers[:6] == list(F.FEATURE_SETS[F.DEFAULT_FEATURE_SET])   # the default set first, in column order
     assert "Run notebook section 9b" in without and "<td>0." not in without   # no numbers invented
     ev = pd.DataFrame([{"attack": "HOIC", "feature": "no_reply", "attack_median": 1.0,
                         "benign_median_same_day": 0.0, "direction": "higher", "attack_zero_share": 0.2,

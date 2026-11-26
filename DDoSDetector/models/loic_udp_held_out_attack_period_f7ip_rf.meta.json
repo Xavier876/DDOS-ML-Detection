@@ -1,0 +1,181 @@
+{
+  "title": "Random Forest: LOIC-UDP held out (trained on HOIC + LOIC-HTTP + benign; attack-period benign split), 6 feature groups (7 columns)",
+  "feature_columns": [
+    "dst_ip_flows_10s",
+    "dst_ip_src_ips_10s",
+    "src_ip_flows_10s",
+    "fwd_bwd_ratio",
+    "no_reply",
+    "empty_payload",
+    "iat_cv"
+  ],
+  "feature_groups": [
+    {
+      "number": 1,
+      "week3": 7,
+      "key": "dst_ip_window",
+      "title": "Flows to the same destination IP",
+      "columns": [
+        "dst_ip_flows_10s"
+      ]
+    },
+    {
+      "number": 2,
+      "week3": null,
+      "key": "src_ips_per_dst",
+      "title": "Distinct source IPs to the same destination IP",
+      "columns": [
+        "dst_ip_src_ips_10s"
+      ]
+    },
+    {
+      "number": 3,
+      "week3": null,
+      "key": "src_ip_window",
+      "title": "Flows from the same source IP",
+      "columns": [
+        "src_ip_flows_10s"
+      ]
+    },
+    {
+      "number": 4,
+      "week3": 3,
+      "key": "fwd_bwd_ratio",
+      "title": "Forward to backward packet ratio",
+      "columns": [
+        "fwd_bwd_ratio"
+      ]
+    },
+    {
+      "number": 5,
+      "week3": 10,
+      "key": "indicators",
+      "title": "No-reply and empty-payload indicators",
+      "columns": [
+        "no_reply",
+        "empty_payload"
+      ]
+    },
+    {
+      "number": 6,
+      "week3": 11,
+      "key": "timing_regularity",
+      "title": "Timing regularity",
+      "columns": [
+        "iat_cv"
+      ]
+    }
+  ],
+  "feature_set": "f7ip",
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "held_out",
+  "setup": "loic_udp_held_out_attack_period_f7ip_rf",
+  "model_type": "random_forest",
+  "held_out_tool": "LOIC-UDP",
+  "benign_split_mode": "attack_period",
+  "benign_split": "attack_period: benign inside the held-out tool's attack window test, all other benign train",
+  "attack_window": [
+    "2018-02-20 13:14:17",
+    "2018-02-21 10:43:21"
+  ],
+  "timing": {
+    "train_seconds": 49.85,
+    "train_rows": 3692347,
+    "predict_seconds": 3.297,
+    "predict_rows": 3347546,
+    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
+  },
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_relabelled.csv",
+    "Wednesday-21-02-2018_victim_capture_labelled.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "train_rows_dropped_missing": 0,
+  "rows_after_cleaning": {
+    "Benign": 7182913,
+    "HOIC": 2116841,
+    "LOIC-HTTP": 575506,
+    "LOIC-UDP": 4827
+  },
+  "train_rows": {
+    "HOIC": 2116841,
+    "Benign": 1000000,
+    "LOIC-HTTP": 575506
+  },
+  "test_rows": {
+    "Benign": 3342719,
+    "LOIC-UDP": 4827
+  },
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 12,
+    "min_samples_leaf": 20,
+    "class_weight": "balanced",
+    "n_jobs": -1,
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 3342719,
+    "n_test_attack": 4827,
+    "recall": {
+      "LOIC-UDP": 0.0
+    },
+    "n_test": {
+      "LOIC-UDP": 4827
+    },
+    "fpr": 0.0,
+    "false_alarms": 2,
+    "pr_auc": 0.0034,
+    "roc_auc": 0.7102,
+    "base_rate": 0.0014,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 0.0,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.2,
+        "recall": 0.0,
+        "fpr": 0.0
+      },
+      {
+        "threshold": 0.1,
+        "recall": 0.0,
+        "fpr": 0.0002
+      },
+      {
+        "threshold": 0.05,
+        "recall": 0.0,
+        "fpr": 0.0007
+      },
+      {
+        "threshold": 0.01,
+        "recall": 0.0,
+        "fpr": 0.011
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-11-06T02:51:01+00:00",
+  "background_file": "loic_udp_held_out_attack_period_f7ip_rf.background.parquet",
+  "model_file": "loic_udp_held_out_attack_period_f7ip_rf.joblib",
+  "version": "d607dca5e1"
+}

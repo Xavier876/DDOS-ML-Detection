@@ -65,7 +65,7 @@ def contributions(model, X: pd.DataFrame) -> np.ndarray:
 
 
 def top_features(values: np.ndarray, names: list[str], k: int = 3) -> list[list[str]]:
-    """For each row, the k largest |SHAP| columns as 'Flow Duration (F2): pushes toward DDoS'."""
+    """For each row, the k largest |SHAP| columns as 'Flow Duration (F8): pushes toward DDoS'."""
     order = np.argsort(-np.abs(values), axis=1)[:, :k]
     labels = np.asarray([column_label(n) for n in names])
     out = []
@@ -76,7 +76,7 @@ def top_features(values: np.ndarray, names: list[str], k: int = 3) -> list[list[
 
 def group_shap(values: np.ndarray, columns: list[str]) -> tuple[np.ndarray, list[str]]:
     """Per-row SHAP value of each feature GROUP = sum of its columns' SHAP values (SHAP is
-    additive, so the row total is unchanged). Returns (values, group labels like 'F10 ...')."""
+    additive, so the row total is unchanged). Returns (values, group labels like 'F5 ...')."""
     groups = groups_for(columns)
     idx = {c: i for i, c in enumerate(columns)}
     out = np.column_stack([values[:, [idx[c] for c in g.output_columns if c in idx]].sum(axis=1)

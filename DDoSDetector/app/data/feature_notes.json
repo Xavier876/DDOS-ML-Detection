@@ -1,33 +1,65 @@
 {
-  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note). Features 12-15: Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx' (22 Oct 2026), text drafted in the project chat. Feature 7: see update4_note.",
+  "source": "Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATED.docx' (group project document, 21 Oct 2026). Text copied from the document; nothing added except 'expected' (see direction_note). Features 12-15: Week 3 of 'Weeks_1_to_4_-_DDoS_Detection_Project_UPDATE3.docx' (22 Oct 2026), text drafted in the project chat. Feature 12 (the port version of Week 3 feature 7): see update4_note. Features 1 to 3: see update5_note. Numbering: on 5 Nov 2026 the catalogue was renumbered (user's decision) so that features 1 to 6 are the default model's inputs; week3_number is each group's number in the group's Week 3 document, and numbers inside the group's own text are Week 3 numbers.",
   "hypothesis_note": "The assumptions below are hypotheses. Where the data did not support an assumption, this is stated.",
   "direction_note": "'Expected' is our reading of each assumption as a direction (higher / lower than benign, or just different), added only so the data can be compared with it. It is not in the Week 3 document; check it with the group. 'none' = the assumption states no direction for that column.",
-  "added_note": "Features 8 to 11 were added after the first experiments and features 12 to 15 in update 3, chosen for their security meaning. Notebook section 9c measures whether they help; nothing here claims that they do. Since update 4 (31 Oct 2026) the default model uses features 1 to 4, 6 and 7, so 8 to 15 are not model inputs.",
+  "added_note": "Features 1 to 6 are the inputs of the default model (set f7ip, update 5, 5 Nov 2026), in its column order. Features 7 to 18 are the rest of the catalogue: the update-4 baseline models (set f9p) use 7, 8, 9, 11, 4 and 12 and stay in the app for comparison and for files without IP columns; 10, 13, 14 and 15 to 18 are not inputs of any shipped model (13, 14, 5 and 6 were added after the first experiments and 15 to 18 in update 3; notebook section 9c measured them; nothing here claims that they help).",
   "groups": [
     {
       "number": 1,
-      "raw_data": "Packet count, byte count and timestamps of the first and last packet in the flow",
-      "calculation": "Packets (or bytes) divided by flow duration",
-      "behaviour": "How hard the source is pushing traffic. A flood aims to exhaust bandwidth or processing capacity, so its rate is high.",
-      "assumption": "Malicious flows in a flood send faster than normal user flows.",
-      "lookalike": "Yes. A large download, a video stream or a popular event can give similar rates.",
-      "evasion": "Yes. Slowing each source down lowers the rate, although this also lowers the damage per source.",
-      "notes": ["Data note: when the duration is zero the rate is undefined, and the dataset contains infinite and missing values here. This links to the cleaning step in Week 2."],
-      "expected": {"Flow Pkts/s": "higher", "Flow Byts/s": "higher"}
+      "week3_number": 7,
+      "status": "update5",
+      "raw_data": "Destination IP address and flow start time for all flows",
+      "calculation": "Count of flows to the same destination IP in the same 10-second window (update 5: counted as feature 12, the port window, is, dst_ip_flows_10s = flows of the same capture file to the same destination IP whose start time falls in the 10 whole seconds before this flow's start second, looking back only)",
+      "behaviour": "This is the “many sources at once” signal. A DDoS attack shows up as many flows reaching one target together, which a single flow cannot show (the limitation from Week 1).",
+      "assumption": "The number of flows reaching a destination in a short window is much higher during an attack than in normal operation.",
+      "lookalike": "Yes. A flash crowd, such as a popular event, is the standard false positive for DDoS detection.",
+      "evasion": "Yes, by spreading the attack over a longer time or over more targets.",
+      "notes": [
+        "Design note (from the document): this feature uses IP addresses and timestamps only to group flows. They are not given to the model as inputs, so the Week 2 rule still holds. It also means a row is no longer fully independent, so we split train and test by time or attack run so that groups do not leak across the split.",
+        "Update 5 (5 Nov 2026): this is the group's original Week 3 feature 7, built from the 20 Feb file and the 21 Feb capture rebuilt from the raw packets with IP addresses (the published 21 Feb file has none). In the feature search of 5 Nov 2026 every model type picked a window feature first (XGBoost and Random Forest feature 2, the linear SVM feature 1); results in docs\\feature_search_findings_2026-11-05.md and in each model's metadata (Help → About)."
+      ],
+      "expected": {
+        "dst_ip_flows_10s": "higher"
+      }
     },
     {
       "number": 2,
-      "raw_data": "Timestamps of the first and last packet",
-      "calculation": "Last packet time minus first packet time, in microseconds",
-      "behaviour": "Floods often produce very short flows (one request and no follow-up) or flows held open to tie up the server.",
-      "assumption": "Attack flows have a duration profile different from normal browsing.",
-      "lookalike": "Yes. Quick API calls are short, and file transfers or streams are long.",
-      "evasion": "Yes, by completing requests normally or closing connections at typical times.",
-      "notes": [],
-      "expected": {"Flow Duration": "different"}
+      "week3_number": null,
+      "status": "update5",
+      "raw_data": "Source and destination IP addresses and flow start time for every flow in the same capture file",
+      "calculation": "dst_ip_src_ips_10s = the number of distinct source IPs that started at least one flow to the same destination IP in the 10 whole seconds before this flow's start second (seconds s-10 to s-1). It looks back only",
+      "behaviour": "How many different machines are hitting the same target at once: the 'distributed' in DDoS.",
+      "assumption": "During an attack the target is reached by more distinct senders in a short window than in normal operation.",
+      "lookalike": "Yes. A popular server or a flash crowd is reached by many distinct clients too; this is the standard false positive for DDoS detection.",
+      "evasion": "Hard to avoid for a distributed attack, because many senders are the point of it; a flood from one machine shows up in feature 3 instead.",
+      "notes": [
+        "Drafted on 5 Nov 2026 for update 5; not yet confirmed by the group. Replace it if the group rewrites it.",
+        "Data note: the dataset has ten attacking machines, so the models learned 'about ten senders in 10 seconds', not hundreds; a busy legitimate server has more normal senders than that. Feature 1 (volume on the target) is the more general of the two."
+      ],
+      "expected": {
+        "dst_ip_src_ips_10s": "higher"
+      }
     },
     {
       "number": 3,
+      "week3_number": null,
+      "status": "update5",
+      "raw_data": "Source IP address and flow start time for every flow in the same capture file",
+      "calculation": "src_ip_flows_10s = the number of flows from the same source IP whose start time falls in the 10 whole seconds before this flow's start second (seconds s-10 to s-1). It looks back only",
+      "behaviour": "How often one sender comes back. A flooding machine opens flow after flow, so each of its flows is surrounded by many others from the same address.",
+      "assumption": "During an attack each attacking address starts far more flows in a short window than a normal client does.",
+      "lookalike": "Yes. A proxy or NAT gateway that carries many users, a crawler or a monitoring host also starts many flows from one address.",
+      "evasion": "Yes, by spreading the attack over more machines so that each one sends slowly, which is what a large botnet does; feature 2 is meant to catch that case.",
+      "notes": [
+        "Drafted on 5 Nov 2026 for update 5; not yet confirmed by the group. Replace it if the group rewrites it."
+      ],
+      "expected": {
+        "src_ip_flows_10s": "higher"
+      }
+    },
+    {
+      "number": 4,
+      "week3_number": 3,
       "raw_data": "Number of packets sent by the initiator and by the responder",
       "calculation": "Tot Fwd Pkts divided by (Tot Bwd Pkts + 1). The +1 only avoids division by zero",
       "behaviour": "A flood sends packets without waiting for replies, so the flow is one-sided, especially when the target is overloaded and stops answering.",
@@ -35,93 +67,30 @@
       "lookalike": "Yes. Uploads, streaming and a server that is down for other reasons also give lopsided ratios.",
       "evasion": "Partly. The attacker controls the traffic it sends, but not the replies, so the ratio can still change if the target struggles.",
       "notes": [],
-      "expected": {"fwd_bwd_ratio": "higher"}
-    },
-    {
-      "number": 4,
-      "raw_data": "Timestamp of every packet in the flow",
-      "calculation": "Mean and standard deviation of the gaps between consecutive packets (either direction)",
-      "behaviour": "Attack tools send automatically, so gaps between packets may be very small or very regular.",
-      "assumption": "Human and normal application traffic is burstier and less regular.",
-      "lookalike": "Yes. Polling clients, heartbeat messages and other automated software are regular too.",
-      "evasion": "Yes, easily, by adding random delays.",
-      "notes": [],
-      "expected": {"Flow IAT Mean": "lower", "Flow IAT Std": "lower"}
+      "expected": {
+        "fwd_bwd_ratio": "higher"
+      }
     },
     {
       "number": 5,
-      "raw_data": "TCP header flags of every packet",
-      "calculation": "Number of packets in the flow with the SYN flag set",
-      "behaviour": "Connection-opening floods send many SYN packets, so SYN counts are unusual relative to the rest of the flow.",
-      "assumption": "The HTTP-based attacks (LOIC-HTTP and HOIC) go through normal TCP connections, so the handshake flags carry some signal.",
-      "lookalike": "Yes. Busy servers see many connection openings from normal users.",
-      "evasion": "Yes, by completing connections properly or using a different protocol.",
-      "notes": ["Limitation: UDP has no TCP flags, so this feature says nothing about LOIC-UDP flows.",
-                "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison.",
-                "Update 3 (22 Oct 2026): dropped from the default feature set f21 (and from f14). In this dataset the column holds only 0 or 1, and no attack flow has a SYN flag. Nine- and fifteen-column models still use it.",
-                "Update 4 (31 Oct 2026): the group settled on six feature groups, and SYN flag count was replaced by feature 7 in the default model (f9p). In the update-4 experiment, removing it changed no result. The original nine-column models (f9) still use it."],
-      "expected": {"SYN Flag Cnt": "higher"}
-    },
-    {
-      "number": 6,
-      "raw_data": "Length of each packet sent by the initiator",
-      "calculation": "Mean and standard deviation of those lengths",
-      "behaviour": "Attack tools often send fixed or repeated payloads, giving low variation in packet size.",
-      "assumption": "Normal requests vary more in size.",
-      "lookalike": "Yes. Machine-to-machine traffic such as API calls and monitoring pings is also uniform.",
-      "evasion": "Yes, by padding or randomising payloads.",
-      "notes": [],
-      "expected": {"Fwd Pkt Len Mean": "none", "Fwd Pkt Len Std": "lower"}
-    },
-    {
-      "number": 7,
-      "status": "update4",
-      "raw_data": "Destination port and flow start time (Timestamp) for every flow in the same capture file",
-      "calculation": "dst_port_flows_10s = the number of flows to the same destination port whose start time falls in the 10 whole seconds before this flow's start second (seconds s-10 to s-1). It looks back only, so it can be counted while traffic arrives",
-      "behaviour": "This is the “many sources at once” signal. A DDoS attack shows up as many flows reaching one target together, which a single flow cannot show (the limitation from Week 1).",
-      "assumption": "The number of flows reaching a destination in a short window is much higher during an attack than in normal operation.",
-      "lookalike": "Yes. A flash crowd, such as a popular event, is the standard false positive for DDoS detection.",
-      "evasion": "Yes, by spreading the attack over a longer time or over more targets.",
-      "notes": ["Design note (from the document): this feature uses IP addresses and timestamps only to group flows. They are not given to the model as inputs, so the Week 2 rule still holds. It also means a row is no longer fully independent, so we split train and test by time or attack run so that groups do not leak across the split.",
-                "From the document's status note: grouping by port or time would probably be a weak substitute, because normal web traffic also uses the same ports.",
-                "Update 4 (31 Oct 2026): built with the destination port instead of the destination IP, because the 21 February file (HOIC and LOIC-UDP) has no destination IP column. The count therefore covers every server using that port, not one target. It needs the complete capture file: on a random sample of rows the counts are far too low. In the update-4 experiment (XGBoost, two seeds) it replaced SYN flag count; held-out results are in the models' metadata (Help → About)."],
-      "expected": {"dst_port_flows_10s": "higher"}
-    },
-    {
-      "number": 8,
-      "raw_data": "Length of each packet sent by the responder",
-      "calculation": "Mean of those lengths (read from the CSV column Bwd Pkt Len Mean)",
-      "behaviour": "What the target sends back. A flood overwhelms the target, so its replies may be small, rare or missing.",
-      "assumption": "During an attack the target's replies are smaller or absent compared with normal exchanges.",
-      "lookalike": "Yes. Uploads, streaming, health checks and any server error also give small or empty replies.",
-      "evasion": "Not directly, because the attacker does not control the replies. The value reflects the target's state as much as the attacker's behaviour, so it may not carry over to other targets.",
-      "notes": [],
-      "expected": {"Bwd Pkt Len Mean": "lower"}
-    },
-    {
-      "number": 9,
-      "raw_data": "TCP header flags of every packet",
-      "calculation": "Number of packets in the flow with the RST flag set (RST Flag Cnt), and with the FIN flag set (FIN Flag Cnt)",
-      "behaviour": "How the connection is closed. Attack tools may abandon connections with a reset or never close them cleanly.",
-      "assumption": "Attack flows end differently from normal browsing.",
-      "lookalike": "Yes. Network faults, timeouts and impatient clients also produce resets, and short sessions often lack a clean close.",
-      "evasion": "Yes, by closing connections properly, which is cheap for HTTP floods.",
-      "notes": ["Limitation: UDP has no TCP flags, so these features say nothing about LOIC-UDP flows."],
-      "expected": {"RST Flag Cnt": "different", "FIN Flag Cnt": "different"}
-    },
-    {
-      "number": 10,
+      "week3_number": 10,
       "raw_data": "Number of packets sent by the responder; length of the packets sent by the initiator",
       "calculation": "no_reply = 1 when Tot Bwd Pkts is 0, else 0. empty_payload = 1 when Fwd Pkt Len Mean is 0, else 0",
       "behaviour": "Whether the exchange happened in both directions, and whether the flow carried any data.",
       "assumption": "Many flood flows are one-sided or carry no application data, while most normal flows do both.",
       "lookalike": "Yes. Port scans, failed connections, keepalives and one-way UDP traffic such as logging are also one-sided or empty.",
       "evasion": "Yes, by sending real requests that get replies, at the cost of more effort per packet.",
-      "notes": ["Note: these indicators restate information already in the packet counts and lengths, so they may add little accuracy. They are included because they make explanations clearer."],
-      "expected": {"no_reply": "higher", "empty_payload": "higher"}
+      "notes": [
+        "Note: these indicators restate information already in the packet counts and lengths, so they may add little accuracy. They are included because they make explanations clearer."
+      ],
+      "expected": {
+        "no_reply": "higher",
+        "empty_payload": "higher"
+      }
     },
     {
-      "number": 11,
+      "number": 6,
+      "week3_number": 11,
       "raw_data": "Timestamp of every packet in the flow",
       "calculation": "iat_cv = Flow IAT Std divided by (Flow IAT Mean + 1). The +1 only avoids division by zero",
       "behaviour": "How regular the sending is, independent of how fast it is.",
@@ -129,10 +98,143 @@
       "lookalike": "Yes. Polling clients, heartbeat messages and other automated software are regular too.",
       "evasion": "Yes, easily, by adding random delays (the same weakness as feature 4).",
       "notes": [],
-      "expected": {"iat_cv": "lower"}
+      "expected": {
+        "iat_cv": "lower"
+      }
+    },
+    {
+      "number": 7,
+      "week3_number": 1,
+      "raw_data": "Packet count, byte count and timestamps of the first and last packet in the flow",
+      "calculation": "Packets (or bytes) divided by flow duration",
+      "behaviour": "How hard the source is pushing traffic. A flood aims to exhaust bandwidth or processing capacity, so its rate is high.",
+      "assumption": "Malicious flows in a flood send faster than normal user flows.",
+      "lookalike": "Yes. A large download, a video stream or a popular event can give similar rates.",
+      "evasion": "Yes. Slowing each source down lowers the rate, although this also lowers the damage per source.",
+      "notes": [
+        "Data note: when the duration is zero the rate is undefined, and the dataset contains infinite and missing values here. This links to the cleaning step in Week 2."
+      ],
+      "expected": {
+        "Flow Pkts/s": "higher",
+        "Flow Byts/s": "higher"
+      }
+    },
+    {
+      "number": 8,
+      "week3_number": 2,
+      "raw_data": "Timestamps of the first and last packet",
+      "calculation": "Last packet time minus first packet time, in microseconds",
+      "behaviour": "Floods often produce very short flows (one request and no follow-up) or flows held open to tie up the server.",
+      "assumption": "Attack flows have a duration profile different from normal browsing.",
+      "lookalike": "Yes. Quick API calls are short, and file transfers or streams are long.",
+      "evasion": "Yes, by completing requests normally or closing connections at typical times.",
+      "notes": [],
+      "expected": {
+        "Flow Duration": "different"
+      }
+    },
+    {
+      "number": 9,
+      "week3_number": 4,
+      "raw_data": "Timestamp of every packet in the flow",
+      "calculation": "Mean and standard deviation of the gaps between consecutive packets (either direction)",
+      "behaviour": "Attack tools send automatically, so gaps between packets may be very small or very regular.",
+      "assumption": "Human and normal application traffic is burstier and less regular.",
+      "lookalike": "Yes. Polling clients, heartbeat messages and other automated software are regular too.",
+      "evasion": "Yes, easily, by adding random delays.",
+      "notes": [],
+      "expected": {
+        "Flow IAT Mean": "lower",
+        "Flow IAT Std": "lower"
+      }
+    },
+    {
+      "number": 10,
+      "week3_number": 5,
+      "raw_data": "TCP header flags of every packet",
+      "calculation": "Number of packets in the flow with the SYN flag set",
+      "behaviour": "Connection-opening floods send many SYN packets, so SYN counts are unusual relative to the rest of the flow.",
+      "assumption": "The HTTP-based attacks (LOIC-HTTP and HOIC) go through normal TCP connections, so the handshake flags carry some signal.",
+      "lookalike": "Yes. Busy servers see many connection openings from normal users.",
+      "evasion": "Yes, by completing connections properly or using a different protocol.",
+      "notes": [
+        "Limitation: UDP has no TCP flags, so this feature says nothing about LOIC-UDP flows.",
+        "Data check (from the document): in the first runs the median SYN flag count is 0 for all three attack tools, and the first XGBoost model trained with a held-out tool did not use the feature at all. So this assumption is not supported so far. The group will decide whether to keep the feature after the feature comparison.",
+        "Update 3 (22 Oct 2026): dropped from the default feature set f21 (and from f14). In this dataset the column holds only 0 or 1, and no attack flow has a SYN flag. Nine- and fifteen-column models still use it.",
+        "Update 4 (31 Oct 2026): the group settled on six feature groups, and SYN flag count was replaced by the port window (feature 12, Week 3 feature 7) in the update-4 model (f9p). In the update-4 experiment, removing it changed no result. The original nine-column models (f9) still use it."
+      ],
+      "expected": {
+        "SYN Flag Cnt": "higher"
+      }
+    },
+    {
+      "number": 11,
+      "week3_number": 6,
+      "raw_data": "Length of each packet sent by the initiator",
+      "calculation": "Mean and standard deviation of those lengths",
+      "behaviour": "Attack tools often send fixed or repeated payloads, giving low variation in packet size.",
+      "assumption": "Normal requests vary more in size.",
+      "lookalike": "Yes. Machine-to-machine traffic such as API calls and monitoring pings is also uniform.",
+      "evasion": "Yes, by padding or randomising payloads.",
+      "notes": [],
+      "expected": {
+        "Fwd Pkt Len Mean": "none",
+        "Fwd Pkt Len Std": "lower"
+      }
     },
     {
       "number": 12,
+      "week3_number": 7,
+      "status": "update4",
+      "raw_data": "Destination port and flow start time (Timestamp) for every flow in the same capture file",
+      "calculation": "dst_port_flows_10s = the number of flows to the same destination port whose start time falls in the 10 whole seconds before this flow's start second (seconds s-10 to s-1). It looks back only, so it can be counted while traffic arrives",
+      "behaviour": "This is the “many sources at once” signal. A DDoS attack shows up as many flows reaching one target together, which a single flow cannot show (the limitation from Week 1).",
+      "assumption": "The number of flows reaching a destination in a short window is much higher during an attack than in normal operation.",
+      "lookalike": "Yes. A flash crowd, such as a popular event, is the standard false positive for DDoS detection.",
+      "evasion": "Yes, by spreading the attack over a longer time or over more targets.",
+      "notes": [
+        "Design note (from the document): this feature uses IP addresses and timestamps only to group flows. They are not given to the model as inputs, so the Week 2 rule still holds. It also means a row is no longer fully independent, so we split train and test by time or attack run so that groups do not leak across the split.",
+        "From the document's status note: grouping by port or time would probably be a weak substitute, because normal web traffic also uses the same ports.",
+        "Update 4 (31 Oct 2026): built with the destination port instead of the destination IP, because the 21 February file (HOIC and LOIC-UDP) has no destination IP column. The count therefore covers every server using that port, not one target. It needs the complete capture file: on a random sample of rows the counts are far too low. In the update-4 experiment (XGBoost, two seeds) it replaced SYN flag count; held-out results are in the models' metadata (Help → About)."
+      ],
+      "expected": {
+        "dst_port_flows_10s": "higher"
+      }
+    },
+    {
+      "number": 13,
+      "week3_number": 8,
+      "raw_data": "Length of each packet sent by the responder",
+      "calculation": "Mean of those lengths (read from the CSV column Bwd Pkt Len Mean)",
+      "behaviour": "What the target sends back. A flood overwhelms the target, so its replies may be small, rare or missing.",
+      "assumption": "During an attack the target's replies are smaller or absent compared with normal exchanges.",
+      "lookalike": "Yes. Uploads, streaming, health checks and any server error also give small or empty replies.",
+      "evasion": "Not directly, because the attacker does not control the replies. The value reflects the target's state as much as the attacker's behaviour, so it may not carry over to other targets.",
+      "notes": [],
+      "expected": {
+        "Bwd Pkt Len Mean": "lower"
+      }
+    },
+    {
+      "number": 14,
+      "week3_number": 9,
+      "raw_data": "TCP header flags of every packet",
+      "calculation": "Number of packets in the flow with the RST flag set (RST Flag Cnt), and with the FIN flag set (FIN Flag Cnt)",
+      "behaviour": "How the connection is closed. Attack tools may abandon connections with a reset or never close them cleanly.",
+      "assumption": "Attack flows end differently from normal browsing.",
+      "lookalike": "Yes. Network faults, timeouts and impatient clients also produce resets, and short sessions often lack a clean close.",
+      "evasion": "Yes, by closing connections properly, which is cheap for HTTP floods.",
+      "notes": [
+        "Limitation: UDP has no TCP flags, so these features say nothing about LOIC-UDP flows."
+      ],
+      "expected": {
+        "RST Flag Cnt": "different",
+        "FIN Flag Cnt": "different"
+      }
+    },
+    {
+      "number": 15,
+      "week3_number": 12,
       "status": "update3",
       "raw_data": "Bytes sent by the initiator and by the responder (TotLen Fwd Pkts, TotLen Bwd Pkts)",
       "calculation": "bwd_fwd_bytes_ratio = TotLen Bwd Pkts / (TotLen Fwd Pkts + 1). The +1 only avoids division by zero",
@@ -141,10 +243,13 @@
       "lookalike": "Yes. Uploads and API writes send more than they receive.",
       "evasion": "Not directly, because the attacker does not control the replies (the same as feature 8).",
       "notes": [],
-      "expected": {"bwd_fwd_bytes_ratio": "lower"}
+      "expected": {
+        "bwd_fwd_bytes_ratio": "lower"
+      }
     },
     {
-      "number": 13,
+      "number": 16,
+      "week3_number": 13,
       "status": "update3",
       "raw_data": "Timestamps of the packets sent by the initiator",
       "calculation": "Mean and minimum gap between consecutive forward packets (CSV columns Fwd IAT Mean, Fwd IAT Min)",
@@ -153,10 +258,14 @@
       "lookalike": "Yes. Polling clients and scripts also send quickly and regularly.",
       "evasion": "Yes, by adding delays between packets.",
       "notes": [],
-      "expected": {"Fwd IAT Mean": "lower", "Fwd IAT Min": "lower"}
+      "expected": {
+        "Fwd IAT Mean": "lower",
+        "Fwd IAT Min": "lower"
+      }
     },
     {
-      "number": 14,
+      "number": 17,
+      "week3_number": 14,
       "status": "update3",
       "raw_data": "Timestamps of every packet in the flow",
       "calculation": "Mean length of the active and of the idle periods in the flow (CSV columns Active Mean, Idle Mean)",
@@ -164,11 +273,17 @@
       "assumption": "Floods send continuously, while people leave idle gaps between bursts.",
       "lookalike": "Yes. Streaming and keep-alive traffic also have long active or idle periods.",
       "evasion": "Yes, by pausing between bursts.",
-      "notes": ["Data note: both columns are 0 in most flows (about 85-89% in a sample), because CICFlowMeter only records active/idle periods for long flows."],
-      "expected": {"Active Mean": "different", "Idle Mean": "lower"}
+      "notes": [
+        "Data note: both columns are 0 in most flows (about 85-89% in a sample), because CICFlowMeter only records active/idle periods for long flows."
+      ],
+      "expected": {
+        "Active Mean": "different",
+        "Idle Mean": "lower"
+      }
     },
     {
-      "number": 15,
+      "number": 18,
+      "week3_number": 15,
       "status": "update3",
       "raw_data": "TCP flags and payload sizes of the packets sent by the initiator",
       "calculation": "PSH Flag Cnt (0/1 in this dataset), and data_share = Fwd Act Data Pkts / Tot Fwd Pkts",
@@ -176,10 +291,16 @@
       "assumption": "HTTP floods push a request in almost every packet, so most forward packets carry data.",
       "lookalike": "Yes. Chatty applications also carry data in most packets.",
       "evasion": "Yes, at the cost of more effort per packet.",
-      "notes": ["Proposed as a more informative replacement for feature 5 (SYN flag count). Limitation: UDP has no TCP flags, so PSH says nothing about LOIC-UDP flows."],
-      "expected": {"PSH Flag Cnt": "higher", "data_share": "higher"}
+      "notes": [
+        "Proposed as a more informative replacement for feature 5 (SYN flag count). Limitation: UDP has no TCP flags, so PSH says nothing about LOIC-UDP flows."
+      ],
+      "expected": {
+        "PSH Flag Cnt": "higher",
+        "data_share": "higher"
+      }
     }
   ],
-  "update3_note": "Features 12-15 were added in update 3 (22 Oct 2026) as inputs of the 21-column model, which is no longer the default (update 4, 31 Oct 2026). Their text was drafted in the project chat and is the same as in Week 3 of the UPDATE3 document; replace it if the group rewrites it. Notebook sections 9b and 9c test them.",
-  "update4_note": "Feature 7 came back in update 4 (31 Oct 2026) in a port version and replaced SYN flag count in the default model. Its security behaviour, assumption, look-alike and evasion text is the group's Week 3 text for feature 7. 'Raw data needed' and 'How it is calculated' were drafted in the project chat for the port version; replace them if the group rewrites them. Notebook section 9b has no evidence rows for it yet."
+  "update3_note": "Features 15 to 18 (Week 3 numbers 12 to 15) were added in update 3 (22 Oct 2026) as inputs of the 21-column model, which is no longer the default (update 4, 31 Oct 2026). Their text was drafted in the project chat and is the same as in Week 3 of the UPDATE3 document; replace it if the group rewrites it. Notebook sections 9b and 9c test them.",
+  "update4_note": "Feature 12 (the group's Week 3 feature 7 in a port version) came back in update 4 (31 Oct 2026) and replaced SYN flag count in the update-4 model (f9p). Its security behaviour, assumption, look-alike and evasion text is the group's Week 3 text for feature 7. 'Raw data needed' and 'How it is calculated' were drafted in the project chat for the port version; replace them if the group rewrites them. Its evidence rows were computed on 5 Nov 2026 by DDoSDetector\\scripts\\feature_evidence_windows.py.",
+  "update5_note": "Features 1 to 3 (the IP windows) were added in update 5 (5 Nov 2026) after a feature search on the 20 Feb file and the 21 Feb capture rebuilt from the raw packets with IP addresses (docs\\feature_search_findings_2026-11-05.md, where they are called F16, F18 and F17); with features 4, 5 and 6 they form the default set f7ip. Feature 1 is the group's original Week 3 feature 7: its security behaviour, assumption, look-alike and evasion text is the group's Week 3 text for feature 7, and 'Raw data needed' and 'How it is calculated' come from the Week 3 feature summary table. The text of features 2 and 3 was drafted on 5 Nov 2026 and has not been confirmed by the group; replace it if the group rewrites it. The evidence rows (what the data showed) for features 1 to 3 and 12 were computed on 5 Nov 2026 by DDoSDetector\\scripts\\feature_evidence_windows.py on the same two files the models are trained on; the 21 Feb benign flows there are the relabelled capture's 2,002 genuinely benign flows."
 }

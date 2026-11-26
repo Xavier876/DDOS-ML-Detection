@@ -69,6 +69,35 @@ def model_columns(meta: dict) -> list[str]:
     return list(meta.get("feature_columns") or meta.get("features") or FEATURES_F9)
 
 
+FPR_BUDGET = 0.001          # the default threshold may cost at most 0.1 % false alarms on the model's benign test split
+FALLBACK_THRESHOLD = 0.5
+
+
+def default_threshold(meta: dict, fpr_budget: float = FPR_BUDGET) -> tuple[float, str]:
+    """The threshold the app starts at for this model, and a one-sentence reason for the Model card.
+
+    Rule (6 Nov 2026): the LOWEST threshold in the model's own threshold sweep (recall and false-alarm rate on its
+    test split, written by the training script) whose false-alarm rate is within the budget. It is chosen from the
+    benign side only, so a held-out tool's scores never set it: a model's scores are calibrated to the tools it was
+    trained on, and an unseen tool's scores can sit well below 0.5. Falls back to 0.5 when the metadata has no
+    sweep or no tested threshold stays within the budget (the by-file and attack-period splits).
+    """
+    sweep = [s for s in (meta.get("metrics") or {}).get("threshold_sweep") or [] if s.get("fpr") is not None]
+    budget = f"{fpr_budget:.1%}"
+    if not sweep:
+        return FALLBACK_THRESHOLD, f"{FALLBACK_THRESHOLD}: this model's metadata has no threshold sweep."
+    within = [s for s in sweep if s["fpr"] <= fpr_budget]
+    if not within:
+        least = min(sweep, key=lambda s: (s["fpr"], -s["threshold"]))
+        return FALLBACK_THRESHOLD, (f"{FALLBACK_THRESHOLD}: no tested threshold keeps false alarms within {budget} on "
+                                    f"this model's benign test split (the lowest is {least['fpr']:.2%} at "
+                                    f"{least['threshold']}).")
+    best = min(within, key=lambda s: s["threshold"])
+    return float(best["threshold"]), (f"{best['threshold']}: the lowest tested threshold whose false-alarm rate on "
+                                      f"this model's benign test split is within {budget} ({best['fpr']:.2%}); "
+                                      f"recall there {best['recall']:.3f}. Chosen from the benign side only.")
+
+
 def setup_of(meta: dict, name: str = "") -> str:
     return meta.get("setup") or meta.get("mode") or name
 

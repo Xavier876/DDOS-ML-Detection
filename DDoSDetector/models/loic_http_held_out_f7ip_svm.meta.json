@@ -1,0 +1,177 @@
+{
+  "title": "Linear SVM: LOIC-HTTP held out (trained on HOIC + LOIC-UDP + benign; per-day benign split), 6 feature groups (7 columns)",
+  "feature_columns": [
+    "dst_ip_flows_10s",
+    "dst_ip_src_ips_10s",
+    "src_ip_flows_10s",
+    "fwd_bwd_ratio",
+    "no_reply",
+    "empty_payload",
+    "iat_cv"
+  ],
+  "feature_groups": [
+    {
+      "number": 1,
+      "week3": 7,
+      "key": "dst_ip_window",
+      "title": "Flows to the same destination IP",
+      "columns": [
+        "dst_ip_flows_10s"
+      ]
+    },
+    {
+      "number": 2,
+      "week3": null,
+      "key": "src_ips_per_dst",
+      "title": "Distinct source IPs to the same destination IP",
+      "columns": [
+        "dst_ip_src_ips_10s"
+      ]
+    },
+    {
+      "number": 3,
+      "week3": null,
+      "key": "src_ip_window",
+      "title": "Flows from the same source IP",
+      "columns": [
+        "src_ip_flows_10s"
+      ]
+    },
+    {
+      "number": 4,
+      "week3": 3,
+      "key": "fwd_bwd_ratio",
+      "title": "Forward to backward packet ratio",
+      "columns": [
+        "fwd_bwd_ratio"
+      ]
+    },
+    {
+      "number": 5,
+      "week3": 10,
+      "key": "indicators",
+      "title": "No-reply and empty-payload indicators",
+      "columns": [
+        "no_reply",
+        "empty_payload"
+      ]
+    },
+    {
+      "number": 6,
+      "week3": 11,
+      "key": "timing_regularity",
+      "title": "Timing regularity",
+      "columns": [
+        "iat_cv"
+      ]
+    }
+  ],
+  "feature_set": "f7ip",
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "held_out",
+  "setup": "loic_http_held_out_f7ip_svm",
+  "model_type": "linear_svm",
+  "held_out_tool": "LOIC-HTTP",
+  "benign_split_mode": "per_day",
+  "benign_split": "per_day: earlier 70% of each file's benign train, later 30% test",
+  "timing": {
+    "train_seconds": 2.96,
+    "train_rows": 3121668,
+    "predict_seconds": 1.685,
+    "predict_rows": 2730381,
+    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
+  },
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_relabelled.csv",
+    "Wednesday-21-02-2018_victim_capture_labelled.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "train_rows_dropped_missing": 0,
+  "rows_after_cleaning": {
+    "Benign": 7182913,
+    "HOIC": 2116841,
+    "LOIC-HTTP": 575506,
+    "LOIC-UDP": 4827
+  },
+  "train_rows": {
+    "HOIC": 2116841,
+    "Benign": 1000000,
+    "LOIC-UDP": 4827
+  },
+  "test_rows": {
+    "Benign": 2154875,
+    "LOIC-HTTP": 575506
+  },
+  "hyperparameters": {
+    "C": 1.0,
+    "class_weight": "balanced",
+    "dual": false,
+    "max_iter": 5000,
+    "inputs": "log(1 + |x|) with sign, then standardised",
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 2154875,
+    "n_test_attack": 575506,
+    "recall": {
+      "LOIC-HTTP": 0.9709
+    },
+    "n_test": {
+      "LOIC-HTTP": 575506
+    },
+    "fpr": 0.0002,
+    "false_alarms": 439,
+    "pr_auc": 0.9978,
+    "roc_auc": 0.9997,
+    "base_rate": 0.2108,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 0.9709,
+        "fpr": 0.0002
+      },
+      {
+        "threshold": 0.2,
+        "recall": 0.9997,
+        "fpr": 0.0495
+      },
+      {
+        "threshold": 0.1,
+        "recall": 0.9998,
+        "fpr": 0.217
+      },
+      {
+        "threshold": 0.05,
+        "recall": 0.9998,
+        "fpr": 0.3849
+      },
+      {
+        "threshold": 0.01,
+        "recall": 0.9999,
+        "fpr": 0.9209
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-11-06T02:56:23+00:00",
+  "background_file": "loic_http_held_out_f7ip_svm.background.parquet",
+  "model_file": "loic_http_held_out_f7ip_svm.joblib",
+  "version": "166fba1250"
+}

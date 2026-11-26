@@ -1,0 +1,477 @@
+{
+ "paths": {
+  "xgboost": [
+   {
+    "size": 1,
+    "groups": [
+     "F18"
+    ],
+    "mean_held_out_recall": 0.6607,
+    "max_fpr": 0.0124,
+    "recall": {
+     "HOIC": 0.9958,
+     "LOIC-HTTP": 0.9864,
+     "LOIC-UDP": 0.0
+    }
+   },
+   {
+    "size": 2,
+    "groups": [
+     "F18",
+     "F3"
+    ],
+    "mean_held_out_recall": 0.811,
+    "max_fpr": 0.0073,
+    "recall": {
+     "HOIC": 0.9962,
+     "LOIC-HTTP": 0.9929,
+     "LOIC-UDP": 0.4438
+    }
+   },
+   {
+    "size": 3,
+    "groups": [
+     "F18",
+     "F3",
+     "F10"
+    ],
+    "mean_held_out_recall": 0.8363,
+    "max_fpr": 0.0064,
+    "recall": {
+     "HOIC": 0.9962,
+     "LOIC-HTTP": 0.9929,
+     "LOIC-UDP": 0.5198
+    }
+   },
+   {
+    "size": 4,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F11"
+    ],
+    "mean_held_out_recall": 0.7156,
+    "max_fpr": 0.0041,
+    "recall": {
+     "HOIC": 0.6321,
+     "LOIC-HTTP": 0.9951,
+     "LOIC-UDP": 0.5195
+    }
+   },
+   {
+    "size": 5,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F11",
+     "F12"
+    ],
+    "mean_held_out_recall": 0.6669,
+    "max_fpr": 0.0044,
+    "recall": {
+     "HOIC": 0.4873,
+     "LOIC-HTTP": 0.9938,
+     "LOIC-UDP": 0.5195
+    }
+   },
+   {
+    "size": 6,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F11",
+     "F12",
+     "F6"
+    ],
+    "mean_held_out_recall": 0.502,
+    "max_fpr": 0.004,
+    "recall": {
+     "HOIC": 0.4873,
+     "LOIC-HTTP": 0.4988,
+     "LOIC-UDP": 0.5198
+    }
+   },
+   {
+    "size": 7,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F11",
+     "F12",
+     "F6",
+     "F8"
+    ],
+    "mean_held_out_recall": 0.5003,
+    "max_fpr": 0.004,
+    "recall": {
+     "HOIC": 0.4873,
+     "LOIC-HTTP": 0.4938,
+     "LOIC-UDP": 0.5198
+    }
+   },
+   {
+    "size": 8,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F11",
+     "F12",
+     "F6",
+     "F8",
+     "F7"
+    ],
+    "mean_held_out_recall": 0.4833,
+    "max_fpr": 0.0041,
+    "recall": {
+     "HOIC": 0.8634,
+     "LOIC-HTTP": 0.0777,
+     "LOIC-UDP": 0.5087
+    }
+   }
+  ],
+  "random_forest": [
+   {
+    "size": 1,
+    "groups": [
+     "F18"
+    ],
+    "mean_held_out_recall": 0.6607,
+    "max_fpr": 0.0124,
+    "recall": {
+     "HOIC": 0.9958,
+     "LOIC-HTTP": 0.9864,
+     "LOIC-UDP": 0.0
+    }
+   },
+   {
+    "size": 2,
+    "groups": [
+     "F18",
+     "F3"
+    ],
+    "mean_held_out_recall": 0.8329,
+    "max_fpr": 0.0074,
+    "recall": {
+     "HOIC": 0.9962,
+     "LOIC-HTTP": 0.992,
+     "LOIC-UDP": 0.5105
+    }
+   },
+   {
+    "size": 3,
+    "groups": [
+     "F18",
+     "F3",
+     "F10"
+    ],
+    "mean_held_out_recall": 0.8356,
+    "max_fpr": 0.0064,
+    "recall": {
+     "HOIC": 0.9962,
+     "LOIC-HTTP": 0.9929,
+     "LOIC-UDP": 0.5177
+    }
+   },
+   {
+    "size": 4,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F16"
+    ],
+    "mean_held_out_recall": 0.8088,
+    "max_fpr": 0.0005,
+    "recall": {
+     "HOIC": 0.9989,
+     "LOIC-HTTP": 0.9098,
+     "LOIC-UDP": 0.5177
+    }
+   },
+   {
+    "size": 5,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F16",
+     "F11"
+    ],
+    "mean_held_out_recall": 0.7447,
+    "max_fpr": 0.0001,
+    "recall": {
+     "HOIC": 0.7371,
+     "LOIC-HTTP": 0.9794,
+     "LOIC-UDP": 0.5177
+    }
+   },
+   {
+    "size": 6,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F16",
+     "F11",
+     "F17"
+    ],
+    "mean_held_out_recall": 0.6732,
+    "max_fpr": 0.0,
+    "recall": {
+     "HOIC": 0.9985,
+     "LOIC-HTTP": 0.5035,
+     "LOIC-UDP": 0.5177
+    }
+   },
+   {
+    "size": 7,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F16",
+     "F11",
+     "F17",
+     "F7"
+    ],
+    "mean_held_out_recall": 0.6599,
+    "max_fpr": 0.0,
+    "recall": {
+     "HOIC": 0.9552,
+     "LOIC-HTTP": 0.5069,
+     "LOIC-UDP": 0.5177
+    }
+   },
+   {
+    "size": 8,
+    "groups": [
+     "F18",
+     "F3",
+     "F10",
+     "F16",
+     "F11",
+     "F17",
+     "F7",
+     "F8"
+    ],
+    "mean_held_out_recall": 0.6714,
+    "max_fpr": 0.0,
+    "recall": {
+     "HOIC": 0.9994,
+     "LOIC-HTTP": 0.4972,
+     "LOIC-UDP": 0.5177
+    }
+   }
+  ],
+  "linear_svm": [
+   {
+    "size": 1,
+    "groups": [
+     "F16"
+    ],
+    "mean_held_out_recall": 0.6631,
+    "max_fpr": 0.3186,
+    "recall": {
+     "HOIC": 0.9997,
+     "LOIC-HTTP": 0.9895,
+     "LOIC-UDP": 0.0
+    }
+   },
+   {
+    "size": 2,
+    "groups": [
+     "F16",
+     "F18"
+    ],
+    "mean_held_out_recall": 0.6662,
+    "max_fpr": 0.0139,
+    "recall": {
+     "HOIC": 1.0,
+     "LOIC-HTTP": 0.9985,
+     "LOIC-UDP": 0.0
+    }
+   },
+   {
+    "size": 3,
+    "groups": [
+     "F16",
+     "F18",
+     "F3"
+    ],
+    "mean_held_out_recall": 0.8022,
+    "max_fpr": 0.0137,
+    "recall": {
+     "HOIC": 1.0,
+     "LOIC-HTTP": 0.9999,
+     "LOIC-UDP": 0.4066
+    }
+   },
+   {
+    "size": 4,
+    "groups": [
+     "F16",
+     "F18",
+     "F3",
+     "F12"
+    ],
+    "mean_held_out_recall": 0.8144,
+    "max_fpr": 0.0134,
+    "recall": {
+     "HOIC": 1.0,
+     "LOIC-HTTP": 0.9999,
+     "LOIC-UDP": 0.4432
+    }
+   },
+   {
+    "size": 5,
+    "groups": [
+     "F16",
+     "F18",
+     "F3",
+     "F12",
+     "F8"
+    ],
+    "mean_held_out_recall": 0.8147,
+    "max_fpr": 0.0128,
+    "recall": {
+     "HOIC": 0.9992,
+     "LOIC-HTTP": 0.9998,
+     "LOIC-UDP": 0.445
+    }
+   },
+   {
+    "size": 6,
+    "groups": [
+     "F16",
+     "F18",
+     "F3",
+     "F12",
+     "F8",
+     "F13"
+    ],
+    "mean_held_out_recall": 0.8148,
+    "max_fpr": 0.013,
+    "recall": {
+     "HOIC": 0.9996,
+     "LOIC-HTTP": 0.9998,
+     "LOIC-UDP": 0.445
+    }
+   },
+   {
+    "size": 7,
+    "groups": [
+     "F16",
+     "F18",
+     "F3",
+     "F12",
+     "F8",
+     "F13",
+     "F11"
+    ],
+    "mean_held_out_recall": 0.8148,
+    "max_fpr": 0.0125,
+    "recall": {
+     "HOIC": 0.9997,
+     "LOIC-HTTP": 0.9996,
+     "LOIC-UDP": 0.445
+    }
+   },
+   {
+    "size": 8,
+    "groups": [
+     "F16",
+     "F18",
+     "F3",
+     "F12",
+     "F8",
+     "F13",
+     "F11",
+     "F17"
+    ],
+    "mean_held_out_recall": 0.8147,
+    "max_fpr": 0.0117,
+    "recall": {
+     "HOIC": 0.9995,
+     "LOIC-HTTP": 0.9995,
+     "LOIC-UDP": 0.445
+    }
+   }
+  ]
+ },
+ "titles": {
+  "F1": "Packet and byte rate",
+  "F2": "Flow duration",
+  "F3": "Forward to backward packet ratio",
+  "F4": "Inter-arrival time",
+  "F5": "SYN flag count",
+  "F6": "Forward packet length",
+  "F7": "Flows to the same destination port",
+  "F8": "Reply behaviour",
+  "F9": "Connection-ending flags",
+  "F10": "No-reply and empty-payload indicators",
+  "F11": "Timing regularity",
+  "F12": "Response size ratio",
+  "F13": "Sender timing",
+  "F16": "Flows to the same destination IP",
+  "F17": "Flows from the same source IP",
+  "F18": "Distinct source IPs to the same destination IP"
+ },
+ "groups": {
+  "F1": [
+   "Flow Pkts/s",
+   "Flow Byts/s"
+  ],
+  "F2": [
+   "Flow Duration"
+  ],
+  "F3": [
+   "fwd_bwd_ratio"
+  ],
+  "F4": [
+   "Flow IAT Mean",
+   "Flow IAT Std"
+  ],
+  "F6": [
+   "Fwd Pkt Len Mean",
+   "Fwd Pkt Len Std"
+  ],
+  "F7": [
+   "dst_port_flows_10s"
+  ],
+  "F8": [
+   "Bwd Pkt Len Mean"
+  ],
+  "F9": [
+   "RST Flag Cnt",
+   "FIN Flag Cnt"
+  ],
+  "F10": [
+   "no_reply",
+   "empty_payload"
+  ],
+  "F11": [
+   "iat_cv"
+  ],
+  "F12": [
+   "bwd_fwd_bytes_ratio"
+  ],
+  "F13": [
+   "Fwd IAT Mean",
+   "Fwd IAT Min"
+  ],
+  "F16": [
+   "dst_ip_flows_10s"
+  ],
+  "F17": [
+   "src_ip_flows_10s"
+  ],
+  "F18": [
+   "dst_ip_src_ips_10s"
+  ]
+ }
+}

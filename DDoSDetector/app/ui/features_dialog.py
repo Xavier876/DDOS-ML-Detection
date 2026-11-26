@@ -9,11 +9,11 @@ import html
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayout
+from PySide6.QtWidgets import QCheckBox, QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayout
 
 from app.core.feature_notes import (AUC_MARGIN, MISSING_EVIDENCE, NO_DIRECTION, NOT_SUPPORTED, OPPOSITE,
                                     SUPPORTED, UNCLEAR, assess, load_evidence, load_notes, notes_by_number)
-from app.core.features import DEFAULT_FEATURE_SET, FEATURE_SETS, REGISTRY, columns_for, summary
+from app.core.features import DEFAULT_FEATURE_SET, FEATURE_SETS, REGISTRY, columns_for, groups_for, summary
 from app.core.numbers import readable
 from app.paths import FEATURE_EVIDENCE, FEATURE_NOTES
 
@@ -52,11 +52,38 @@ def evidence_html(evidence: pd.DataFrame | None, column: str, expected: str) -> 
     return "".join(out)
 
 
-def features_html(notes: dict, evidence: pd.DataFrame | None) -> str:
+def _group_html(g, n: dict, notes: dict, evidence, in_default: bool, position: str = "") -> list[str]:
+    """One group's section. Feature numbers are the app's (1-6 = the default model's inputs since 5 Nov 2026);
+    the group's Week 3 document number is shown next to the columns."""
+    out = []
+    not_default = "" if in_default else " — not in the default set"
+    week3 = f"; Week 3 document: feature {g.week3}" if g.week3 is not None else "; not in the Week 3 document"
+    out.append(f"<h3>{position}Feature {g.number}: {html.escape(g.title)}{not_default} "
+               f"<span style='color:#52514e; font-weight:normal'>({html.escape(', '.join(g.output_columns))}{week3})</span></h3>")
+    if n.get("status") == "update4":
+        out.append(f"<p style='color:#b85c00'>⚠ {html.escape(notes.get('update4_note', ''))}</p>")
+    out.append("<table cellpadding='2'>")
+    for key, label in _FIELDS:
+        out.append(f"<tr><td valign='top' width='230'><b>{label}</b></td>"
+                   f"<td>{html.escape(n.get(key, ''))}</td></tr>")
+    out.append("</table>")
+    for note in n.get("notes", []):
+        out.append(f"<p style='color:#52514e'>{html.escape(note)}</p>")
+    for col in g.output_columns:
+        out.append(evidence_html(evidence, col, n["expected"].get(col, "none")))
+    return out
+
+
+def features_html(notes: dict, evidence: pd.DataFrame | None, columns=None, full: bool = True) -> str:
+    """The inputs of `columns` (default: the default set) first, in the model's column order; with `full`
+    the other registry groups follow, otherwise only a one-line pointer to them."""
     by_num = notes_by_number(notes)
-    default = FEATURE_SETS[DEFAULT_FEATURE_SET]
-    out = [f"<h2>Model features (default set {DEFAULT_FEATURE_SET}): "
-           f"{html.escape(summary(columns_for(DEFAULT_FEATURE_SET)))}</h2>",
+    columns = list(columns) if columns is not None else columns_for(DEFAULT_FEATURE_SET)
+    inputs = [g.number for g in groups_for(columns)]            # registry order
+    fset = next((n for n, nums in FEATURE_SETS.items() if sorted(nums) == inputs), "custom")
+    default = list(FEATURE_SETS[fset]) if fset != "custom" else inputs   # the model's column order
+    label = f"default set {DEFAULT_FEATURE_SET}" if fset == DEFAULT_FEATURE_SET else f"loaded model's set {fset}"
+    out = [f"<h2>Model features ({label}): {html.escape(summary(columns))}</h2>",
            f"<p style='padding:6px; background:#fff4e5; border-left:4px solid #b85c00'>"
            f"<b>{html.escape(notes['hypothesis_note'])}</b></p>",
            f"<p style='color:#52514e'>Source: {html.escape(notes.get('source', ''))}</p>",
@@ -73,26 +100,35 @@ def features_html(notes: dict, evidence: pd.DataFrame | None) -> str:
                "only say 'different', any AUC at least "
                f"{AUC_MARGIN} from 0.5 counts. A feature can still help the model in combination with others "
                "when it does not separate on its own.</p>")
+    by_number = {g.number: g for g in REGISTRY}
+    out.append(f"<h2>Inputs of the {'default' if fset == DEFAULT_FEATURE_SET else 'loaded'} model ({fset}), "
+               "in the model's column order</h2>")
+    if any(by_num[n].get("status") == "update5" for n in default):
+        out.append("<h3>Added in update 5 (5 Nov 2026): features 1 to 3</h3>"
+                   f"<p style='color:#b85c00'>⚠ {html.escape(notes.get('update5_note', ''))}</p>")
+    out.append("<p style='color:#52514e'>Features 1 to 6 are the model's inputs (the catalogue was renumbered on "
+               "5 Nov 2026); each heading also gives the group's number in the Week 3 project document, and numbers "
+               "inside the group's own text are those Week 3 numbers.</p>")
+    for i, number in enumerate(default, start=1):
+        out += _group_html(by_number[number], by_num[number], notes, evidence, True, f"Input {i} of {len(default)} · ")
+    if not full:
+        others = len(REGISTRY) - len(default)
+        out.append(f"<p style='color:#52514e'>The registry holds {others} more feature groups (the update-4 baseline "
+                   "f9p and the notebook comparisons). Tick \"Show the full catalogue\" to list them.</p>")
+        return "\n".join(out)
+    out.append("<h2>Other feature groups in the registry (not inputs of this model)</h2>"
+               "<p style='color:#52514e'>Kept so that the update-4 baseline models (f9p: features 7, 8, 9, 11, 4 and 12) "
+               "and models from the notebook comparisons can be opened and explained. Help → About lists the "
+               "inputs of the model that is loaded.</p>")
     for g in REGISTRY:
+        if g.number in default:
+            continue
         n = by_num[g.number]
         if n.get("status") == "update3" and not any(by_num[p.number].get("status") == "update3"
                                                     for p in REGISTRY if p.number < g.number):
-            out.append(f"<h2>Added in update 3</h2>"
+            out.append(f"<h3>Added in update 3</h3>"
                        f"<p style='color:#b85c00'>⚠ {html.escape(notes.get('update3_note', ''))}</p>")
-        not_default = "" if g.number in default else " — not in the default set"
-        out.append(f"<h3>Feature {g.number}: {html.escape(g.title)}{not_default} "
-                   f"<span style='color:#52514e; font-weight:normal'>({html.escape(', '.join(g.output_columns))})</span></h3>")
-        if n.get("status") == "update4":
-            out.append(f"<p style='color:#b85c00'>⚠ {html.escape(notes.get('update4_note', ''))}</p>")
-        out.append("<table cellpadding='2'>")
-        for key, label in _FIELDS:
-            out.append(f"<tr><td valign='top' width='230'><b>{label}</b></td>"
-                       f"<td>{html.escape(n.get(key, ''))}</td></tr>")
-        out.append("</table>")
-        for note in n.get("notes", []):
-            out.append(f"<p style='color:#52514e'>{html.escape(note)}</p>")
-        for col in g.output_columns:
-            out.append(evidence_html(evidence, col, n["expected"].get(col, "none")))
+        out += _group_html(g, n, notes, evidence, False)
     d = notes.get("dropped")
     if d:
         out.append(f"<h3>Feature {d['number']}: {html.escape(d['title'])} (dropped)</h3>"
@@ -101,18 +137,36 @@ def features_html(notes: dict, evidence: pd.DataFrame | None) -> str:
 
 
 class FeaturesDialog(QDialog):
-    def __init__(self, parent=None, notes_path: Path = FEATURE_NOTES, evidence_path: Path = FEATURE_EVIDENCE):
+    """Help -> Features. Shows the loaded model's inputs; a tick box adds the rest of the catalogue."""
+
+    def __init__(self, parent=None, notes_path: Path = FEATURE_NOTES, evidence_path: Path = FEATURE_EVIDENCE,
+                 columns=None):
         super().__init__(parent)
         self.setWindowTitle("Features: assumptions and evidence")
         self.resize(980, 820)
+        self.columns = columns
         self.browser = QTextBrowser()
+        self.full = QCheckBox("Show the full catalogue (all 18 feature groups, including the baseline's)")
+        self.full.toggled.connect(self._render)
         try:
-            text = features_html(load_notes(notes_path), load_evidence(evidence_path))
+            self.notes, self.evidence = load_notes(notes_path), load_evidence(evidence_path)
+            self.error = None
         except (OSError, ValueError, KeyError) as e:
-            text = f"<p>Could not read the feature notes ({html.escape(str(notes_path))}): {html.escape(str(e))}</p>"
-        self.browser.setHtml(text)
+            self.notes, self.evidence = None, None
+            self.error = f"<p>Could not read the feature notes ({html.escape(str(notes_path))}): {html.escape(str(e))}</p>"
+        self._render()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
         lay = QVBoxLayout(self)
+        lay.addWidget(self.full)
         lay.addWidget(self.browser)
         lay.addWidget(buttons)
+
+    def _render(self):
+        if self.error:
+            self.browser.setHtml(self.error)
+            return
+        try:
+            self.browser.setHtml(features_html(self.notes, self.evidence, self.columns, full=self.full.isChecked()))
+        except KeyError as e:          # a model with a column the notes file does not know
+            self.browser.setHtml(f"<p>Could not describe this model's features: {html.escape(str(e))}</p>")

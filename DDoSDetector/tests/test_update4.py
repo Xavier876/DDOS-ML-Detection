@@ -1,5 +1,5 @@
 """Update 4: six feature groups; SYN Flag Cnt replaced by feature 7 (flows to the same destination port
-in the previous 10 s), set f9p, the default."""
+in the previous 10 s), set f9p, the default until update 5 (test_update5.py), now the comparison baseline."""
 import json
 
 import numpy as np
@@ -36,12 +36,12 @@ def _flows(rows):
 
 
 # --- the set -------------------------------------------------------------------------
-def test_f9p_is_the_default_set():
-    assert F.DEFAULT_FEATURE_SET == "f9p" and F.columns_for("f9p") == F.FEATURES_F9P
+def test_f9p_is_the_update4_set():
+    assert F.columns_for("f9p") == F.FEATURES_F9P and F.feature_set_of(F.FEATURES_F9P) == "f9p"
     assert F.FEATURES_F9P == [c for c in F.FEATURES_F9 if c != "SYN Flag Cnt"] + [WIN]   # SYN swapped out
     assert F.summary(F.FEATURES_F9P) == "6 feature groups (9 columns)"
-    assert F.group(7).core and F.CONTEXT_COLUMNS == [WIN]
-    assert F.column_label(WIN) == "dst_port_flows_10s (F7)"
+    assert F.group(12).core and F.group(12).window and WIN in F.CONTEXT_COLUMNS
+    assert F.column_label(WIN) == "dst_port_flows_10s (F12)" and F.group(12).week3 == 7
     assert F.required_raw([WIN]) == ["Timestamp", "Dst Port"]
     assert not set(F.CONTEXT_RAW) & set(F.ALL_RAW)            # never coerced to numbers by clean_frame
 
@@ -100,16 +100,14 @@ def test_csv_without_time_or_port_names_them():
 
 
 # --- app ------------------------------------------------------------------------------
-def test_f9p_is_the_app_default_and_panel_marks_5_and_8_to_15(qapp):
+def test_f9p_stays_as_the_fallback_model_and_panel_marks_5_and_7(qapp):
     from app.ui.features_dialog import features_html
     from app.ui.main_window import DEFAULT_MODELS
-    assert DEFAULT_MODELS == ("all_tools_f9p",)        # only f9p models ship (update 4)
+    assert "all_tools_f9p" in DEFAULT_MODELS            # offered when a CSV has no IP columns
     h = features_html(load_notes(FEATURE_NOTES), None)
-    assert "Model features (default set f9p): 6 feature groups (9 columns)" in h
-    assert "Feature 5: SYN flag count — not in the default set" in h
-    assert "Feature 7: Flows to the same destination port <span" in h and "update 4" in h
-    for n in (8, 9, 10, 11, 12, 13, 14, 15):
-        assert f"Feature {n}: {F.group(n).title} — not in the default set" in h
+    assert "Feature 10: SYN flag count — not in the default set" in h
+    assert "Feature 12: Flows to the same destination port — not in the default set <span" in h and "update 4" in h
+    assert "Week 3 document: feature 7)" in h
 
 
 def test_model_card_for_f9p(bundle9p):
@@ -123,17 +121,17 @@ def test_model_card_for_f9p(bundle9p):
 def test_update4_notes():
     notes = load_notes(FEATURE_NOTES)
     by = notes_by_number(notes)
-    assert any(t.startswith("Update 4 (31 Oct 2026)") for t in by[5]["notes"])
-    assert by[7]["expected"] == {WIN: "higher"} and "drafted in the project chat" in notes["update4_note"]
+    assert any(t.startswith("Update 4 (31 Oct 2026)") for t in by[10]["notes"])     # SYN flag count
+    assert by[12]["expected"] == {WIN: "higher"} and "drafted in the project chat" in notes["update4_note"]
     assert "no longer the default" in notes["update3_note"]
 
 
-def test_trained_default_models_have_the_f9p_columns():
+def test_trained_f9p_models_have_the_f9p_columns():
     from train.train_model import setup_name
     assert setup_name("all_tools", None, "per_day", "f9p") == "all_tools_f9p"
-    metas = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((PROJECT_DIR / "models").glob("*.meta.json"))]
+    metas = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((PROJECT_DIR / "models").glob("*_f9p*.meta.json"))]
     if not metas:
-        pytest.skip("no trained models in the models folder")
-    for meta in metas:   # every model shipped in the folder uses the default set
+        pytest.skip("no trained f9p models in the models folder")
+    for meta in metas:
         assert meta["feature_columns"] == F.FEATURES_F9P and meta["feature_set"] == "f9p", meta.get("title")
-        assert [g["number"] for g in meta["feature_groups"]] == [1, 2, 3, 4, 6, 7]
+        assert [g["number"] for g in meta["feature_groups"]] == [4, 7, 8, 9, 11, 12]

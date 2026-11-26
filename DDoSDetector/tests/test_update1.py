@@ -31,7 +31,7 @@ from conftest import make_flows
 # --- wording -------------------------------------------------------------------------
 def test_original_nine_columns_are_6_groups():
     from app.core.features import groups_for, summary
-    assert [g.number for g in groups_for(FEATURES_F9)] == [1, 2, 3, 4, 5, 6]
+    assert [g.number for g in groups_for(FEATURES_F9)] == [4, 7, 8, 9, 10, 11]   # app numbers since 5 Nov 2026
     assert summary(FEATURES_F9) == "6 feature groups (9 columns)"
 
 
@@ -200,7 +200,7 @@ def test_feature_notes_cover_every_registry_group():
         assert set(n["expected"].values()) <= {"higher", "lower", "different", "none"}
         for k in ("raw_data", "calculation", "behaviour", "assumption", "lookalike", "evasion"):
             assert n[k]
-    assert "draft" not in notes and "dropped" not in notes and by_num[7]["status"] == "update4"
+    assert "draft" not in notes and "dropped" not in notes and by_num[12]["status"] == "update4"
 
 
 def test_features_panel_with_and_without_evidence(tmp_path, qapp):

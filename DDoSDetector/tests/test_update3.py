@@ -25,8 +25,8 @@ def test_feature_sets_without_syn():
     assert F.summary(f21) == "13 feature groups (21 columns)"
     assert F.columns_for("f15") == F.FEATURES_F15 and len(F.FEATURES_F15) == 15   # kept for comparison
     assert F.FEATURES_F21 == f21
-    assert F.column_label("bwd_fwd_bytes_ratio") == "bwd_fwd_bytes_ratio (F12)"
-    assert F.column_label("data_share") == "data_share (F15)"
+    assert F.column_label("bwd_fwd_bytes_ratio") == "bwd_fwd_bytes_ratio (F15)"
+    assert F.column_label("data_share") == "data_share (F18)"
 
 
 def test_candidate_formulas():
@@ -36,7 +36,7 @@ def test_candidate_formulas():
         {"TotLen Fwd Pkts": 0, "TotLen Bwd Pkts": 0, "Fwd IAT Mean": 0, "Fwd IAT Min": 0,
          "Active Mean": 5, "Idle Mean": 7, "PSH Flag Cnt": 0, "Fwd Act Data Pkts": 0, "Tot Fwd Pkts": 0},
     ])
-    out = pd.concat([F.group(n).build(df) for n in (12, 13, 14, 15)], axis=1)
+    out = pd.concat([F.group(n).build(df) for n in (15, 16, 17, 18)], axis=1)
     assert out.loc[0, "bwd_fwd_bytes_ratio"] == pytest.approx(1060 / 1061)
     assert out.loc[1, "bwd_fwd_bytes_ratio"] == 0
     assert out.loc[0, "data_share"] == 1.0 and np.isnan(out.loc[1, "data_share"])   # 0/0 -> missing
@@ -45,7 +45,7 @@ def test_candidate_formulas():
 
 def test_candidates_are_optional_extras():
     # not core: missing values don't stop scoring, rows are not dropped on them
-    for n in (12, 13, 14, 15):
+    for n in (15, 16, 17, 18):   # app numbers (Week 3: 12-15)
         assert not F.group(n).core
     assert set(F.EXTRA_RAW) >= {"TotLen Fwd Pkts", "TotLen Bwd Pkts", "Fwd IAT Mean", "Fwd IAT Min",
                                 "Active Mean", "Idle Mean", "PSH Flag Cnt", "Fwd Act Data Pkts"}
@@ -68,13 +68,13 @@ def test_csv_without_candidate_columns_still_works_for_f15(bundle15):
 def test_update3_notes_are_marked():
     notes = load_notes(FEATURE_NOTES)
     by = notes_by_number(notes)
-    for n in (12, 13, 14, 15):
+    for n in (15, 16, 17, 18):   # app numbers (Week 3: 12-15)
         assert by[n]["status"] == "update3"
         assert set(by[n]["expected"]) == set(F.group(n).output_columns)
-    for n in (1, 2, 3, 4, 5, 6, 8, 9, 10, 11):
+    for n in (4, 5, 6, 7, 8, 9, 10, 11, 13, 14):     # the Week 3 originals (app numbers) carry no status
         assert "status" not in by[n]
     assert "drafted in the project chat" in notes["update3_note"]
-    assert any("dropped from the default feature set" in t for t in by[5]["notes"])
+    assert any("dropped from the default feature set" in t for t in by[10]["notes"])   # SYN flag count
 
 
 @pytest.fixture(scope="module")
@@ -105,4 +105,4 @@ def test_trained_f21_models_have_the_registry_columns():
     for p in real:
         meta = json.loads(p.read_text(encoding="utf-8"))
         assert meta["feature_columns"] == F.FEATURES_F21 and meta["feature_set"] == "f21"
-        assert [g["number"] for g in meta["feature_groups"]] == [1, 2, 3, 4, 6, 8, 9, 10, 11, 12, 13, 14, 15]
+        assert [g["number"] for g in meta["feature_groups"]] == [4, 5, 6, 7, 8, 9, 11, 13, 14, 15, 16, 17, 18]

@@ -1,0 +1,177 @@
+{
+  "title": "Random Forest: HOIC held out (trained on LOIC-HTTP + LOIC-UDP + benign; by-file benign split), 6 feature groups (7 columns)",
+  "feature_columns": [
+    "dst_ip_flows_10s",
+    "dst_ip_src_ips_10s",
+    "src_ip_flows_10s",
+    "fwd_bwd_ratio",
+    "no_reply",
+    "empty_payload",
+    "iat_cv"
+  ],
+  "feature_groups": [
+    {
+      "number": 1,
+      "week3": 7,
+      "key": "dst_ip_window",
+      "title": "Flows to the same destination IP",
+      "columns": [
+        "dst_ip_flows_10s"
+      ]
+    },
+    {
+      "number": 2,
+      "week3": null,
+      "key": "src_ips_per_dst",
+      "title": "Distinct source IPs to the same destination IP",
+      "columns": [
+        "dst_ip_src_ips_10s"
+      ]
+    },
+    {
+      "number": 3,
+      "week3": null,
+      "key": "src_ip_window",
+      "title": "Flows from the same source IP",
+      "columns": [
+        "src_ip_flows_10s"
+      ]
+    },
+    {
+      "number": 4,
+      "week3": 3,
+      "key": "fwd_bwd_ratio",
+      "title": "Forward to backward packet ratio",
+      "columns": [
+        "fwd_bwd_ratio"
+      ]
+    },
+    {
+      "number": 5,
+      "week3": 10,
+      "key": "indicators",
+      "title": "No-reply and empty-payload indicators",
+      "columns": [
+        "no_reply",
+        "empty_payload"
+      ]
+    },
+    {
+      "number": 6,
+      "week3": 11,
+      "key": "timing_regularity",
+      "title": "Timing regularity",
+      "columns": [
+        "iat_cv"
+      ]
+    }
+  ],
+  "feature_set": "f7ip",
+  "label_mapping": {
+    "contains 'benign'": "Benign",
+    "contains 'udp'": "LOIC-UDP",
+    "contains 'hoic'": "HOIC",
+    "contains 'http'": "LOIC-HTTP",
+    "anything else": "Other"
+  },
+  "positive_class": "DDoS (any tool) = 1, Benign = 0",
+  "mode": "held_out",
+  "setup": "hoic_held_out_by_file_f7ip_rf",
+  "model_type": "random_forest",
+  "held_out_tool": "HOIC",
+  "benign_split_mode": "by_file",
+  "benign_split": "by_file: benign of the earlier file trains, benign of the later file tests",
+  "timing": {
+    "train_seconds": 20.46,
+    "train_rows": 1580333,
+    "predict_seconds": 1.781,
+    "predict_rows": 2118823,
+    "note": "measured with time.perf_counter; prediction time includes computing the test metrics"
+  },
+  "seed": 0,
+  "data_files": [
+    "Tuesday-20-02-2018_relabelled.csv",
+    "Wednesday-21-02-2018_victim_capture_labelled.csv"
+  ],
+  "nrows_per_file": null,
+  "extra_labelled": null,
+  "train_rows_dropped_missing": 0,
+  "rows_after_cleaning": {
+    "Benign": 7182913,
+    "HOIC": 2116841,
+    "LOIC-HTTP": 575506,
+    "LOIC-UDP": 4827
+  },
+  "train_rows": {
+    "Benign": 1000000,
+    "LOIC-HTTP": 575506,
+    "LOIC-UDP": 4827
+  },
+  "test_rows": {
+    "HOIC": 2116841,
+    "Benign": 1982
+  },
+  "hyperparameters": {
+    "n_estimators": 100,
+    "max_depth": 12,
+    "min_samples_leaf": 20,
+    "class_weight": "balanced",
+    "n_jobs": -1,
+    "random_state": 0
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "n_test_benign": 1982,
+    "n_test_attack": 2116841,
+    "recall": {
+      "HOIC": 0.9987
+    },
+    "n_test": {
+      "HOIC": 2116841
+    },
+    "fpr": 0.0368,
+    "false_alarms": 73,
+    "pr_auc": 1.0,
+    "roc_auc": 0.994,
+    "base_rate": 0.9991,
+    "threshold_sweep": [
+      {
+        "threshold": 0.5,
+        "recall": 0.9987,
+        "fpr": 0.0368
+      },
+      {
+        "threshold": 0.2,
+        "recall": 0.9999,
+        "fpr": 0.4157
+      },
+      {
+        "threshold": 0.1,
+        "recall": 0.9999,
+        "fpr": 0.4475
+      },
+      {
+        "threshold": 0.05,
+        "recall": 1.0,
+        "fpr": 0.4586
+      },
+      {
+        "threshold": 0.01,
+        "recall": 1.0,
+        "fpr": 0.4702
+      }
+    ]
+  },
+  "versions": {
+    "python": "3.14.7",
+    "xgboost": "3.4.1",
+    "shap": "0.54.1",
+    "scikit-learn": "1.9.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4"
+  },
+  "created": "2026-11-06T02:45:05+00:00",
+  "background_file": "hoic_held_out_by_file_f7ip_rf.background.parquet",
+  "model_file": "hoic_held_out_by_file_f7ip_rf.joblib",
+  "version": "6428e71164"
+}
