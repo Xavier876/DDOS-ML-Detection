@@ -28,3 +28,18 @@ dist/
 **/models/*.csv
 # ...except the notebook 9c results the app reads (small)
 !**/models/feature_set_comparison.csv
+
+# Local working notes and Office lock files (not part of the submission)
+CLAUDE.md
+~$*
+
+# Presentation and report material kept locally (built by the scripts below; in git history before the submission clean-up)
+docs/*.pptx
+docs/*.docx
+docs/*.pdf
+docs/presentation_frame.png
+DDoSDetector/scripts/build_presentation_part2.ps1
+DDoSDetector/scripts/build_presentation_script_docx.py
+DDoSDetector/scripts/build_paper_methodology_docx.py
+DDoSDetector/scripts/build_weeks_update5_docx.py
+DDoSDetector/scripts/renumber_model_metadata.py
